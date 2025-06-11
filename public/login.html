@@ -99,7 +99,7 @@
     <!-- Login JavaScript -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const API_URL = 'http://localhost:5000/api';            // Check if user is already logged in
+            const API_URL = '/api';            // Check if user is already logged in
             const token = localStorage.getItem('token');
             if (token) {
                 // Redirect to main app

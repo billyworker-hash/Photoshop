@@ -1,7 +1,7 @@
 // ApiManager.js - Handles all API calls and authentication
 class ApiManager {
     constructor() {
-        this.API_URL = 'http://localhost:5000/api';
+        this.API_URL = '/api';
         this.token = localStorage.getItem('token');
         this.currentUser = null;
     }
