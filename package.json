@@ -7,8 +7,7 @@
     "start": "node build/app.js",
     "dev": "nodemon server.js",
     "build": "node build-script.js",
-    "build:server": "webpack --config webpack.server.config.js",
-    "postinstall": "npm run build"
+    "build:server": "webpack --config webpack.server.config.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

@@ -1,0 +1,17 @@
+{
+  "name": "simple-crm-build",
+  "version": "1.0.0",
+  "description": "A simple CRM system with Bootstrap frontend (Production Build)",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.15.1"
+  }
+}
