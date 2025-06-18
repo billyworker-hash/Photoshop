@@ -4,27 +4,42 @@ class ApiManager {
         this.API_URL = '/api';
         this.token = localStorage.getItem('token');
         this.currentUser = null;
-    }
-
-    // Global fetch wrapper with automatic auth handling
+    }    // Global fetch wrapper with automatic auth handling
     async authenticatedFetch(url, options = {}) {
         const headers = {
             'Authorization': `Bearer ${this.token}`,
             ...options.headers
         };
 
-        const response = await fetch(url, {
-            ...options,
-            headers
-        });        // If unauthorized, redirect to login
-        if (response.status === 401) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            window.location.href = '/login';
-            throw new Error('Authentication failed');
-        }
+        // Set timeout for large requests (e.g., bulk uploads)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), options.timeout || 120000); // 2 minutes default
 
-        return response;
+        try {
+            const response = await fetch(url, {
+                ...options,
+                headers,
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            // If unauthorized, redirect to login
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = '/login';
+                throw new Error('Authentication failed');
+            }
+
+            return response;
+        } catch (error) {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+                throw new Error('Request timeout - please try again or contact support');
+            }
+            throw error;
+        }
     }
 
     // Update token
@@ -74,15 +89,15 @@ class ApiManager {
             throw new Error(`GET ${endpoint} failed: ${response.statusText}`);
         }
         return await response.json();
-    }
-
-    async post(endpoint, data) {
+    }    async post(endpoint, data) {
         const response = await this.authenticatedFetch(`${this.API_URL}${endpoint}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify(data),
+            // Use longer timeout for bulk operations
+            timeout: endpoint.includes('bulk') ? 300000 : 120000 // 5 minutes for bulk, 2 minutes for regular
         });
         
         if (!response.ok) {

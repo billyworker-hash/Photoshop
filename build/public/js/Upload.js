@@ -1,9 +1,23 @@
 // Upload.js - Handles lead list management functionality
-class UploadManager {
-    constructor(apiManager) {
+class UploadManager {    constructor(apiManager) {
         this.apiManager = apiManager;
         this.selectedListId = null;
         this.selectedList = null; // Store the selected list object with its labels
+        
+        // Pagination properties for leads
+        this.currentPage = 1;
+        this.leadsPerPage = 10; // Default to 10 leads per page
+        this.totalPages = 1;
+        this.filteredLeads = [];        this.allLeads = []; // Store all leads for the selected list
+        this.eventListeners = []; // Track event listeners for cleanup
+        this.filterListenersSetup = false; // Track if filter listeners are already set up
+        this.listSearchSetup = false; // Track if list search is already set up
+        
+        // Pagination properties for lists
+        this.listsCurrentPage = 1;
+        this.listsPerPage = 6; // 6 lists per page
+        this.listsTotalPages = 1;
+        this.allLists = []; // Store all lists
     }
 
     // Initialize upload functionality
@@ -19,62 +33,20 @@ class UploadManager {
             console.error('Error loading lead lists:', error);
             this.showError('Failed to load lead lists');
         }
-    }
-
-    // Render lead lists in the sidebar
+    }    // Render lead lists in the sidebar
     renderLeadLists(lists) {
-        const container = document.getElementById('lead-lists-container');
-        if (!container) return;
+        // Store all lists for pagination and search
+        this.allLists = lists;
 
-        if (lists.length === 0) {
-            container.innerHTML = `
-                <div class="text-center text-muted">
-                    <i class="bi bi-list-ul fs-1"></i>
-                    <p class="mt-2">No lists created yet</p>
-                    <button class="btn btn-sm btn-outline-primary" onclick="window.uploadManager.showCreateListModal()">
-                        Create First List
-                    </button>
-                </div>
-            `;
-            return;
-        }        const listsHtml = lists.map(list => {
-            // Check if user is admin to show visibility controls
-            const currentUser = this.apiManager.getCurrentUser();
-            const isAdmin = currentUser && currentUser.role === 'admin';
-              // Create visibility toggle button for admins
-            const visibilityButton = isAdmin ? `
-                <button class="btn btn-sm ${list.isVisibleToUsers ? 'btn-success' : 'btn-outline-secondary'}" 
-                        onclick="event.stopPropagation(); window.uploadManager.toggleListVisibility('${list._id}', ${list.isVisibleToUsers})"
-                        title="${list.isVisibleToUsers ? 'Click to hide from agents' : 'Click to show to agents'}">
-                    <i class="bi ${list.isVisibleToUsers ? 'bi-eye' : 'bi-eye-slash'} me-1"></i>
-                    ${list.isVisibleToUsers ? 'Visible' : 'Hidden'}
-                </button>
-            ` : '';
-            
-            return `
-            <div class="list-item p-3 border-bottom cursor-pointer ${this.selectedListId === list._id ? 'bg-light' : ''}" 
-                 onclick="window.uploadManager.selectList('${list._id}')">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div class="flex-grow-1">
-                        <h6 class="mb-1">${list.name}</h6>
-                        <small class="text-muted">${list.description || 'No description'}</small>                        <div class="mt-1">
-                            <small class="badge bg-secondary">${list.leadCount || 0} leads</small>
-                            ${list.isVisibleToUsers === false ? 
-                                (list.visibleToSpecificAgents && list.visibleToSpecificAgents.length > 0 ? 
-                                    `<small class="badge bg-info text-dark ms-1"><i class="bi bi-person-check"></i> Visible only to: ${list.visibleToSpecificAgents.map(agent => agent.name).join(', ')}</small>` :
-                                    '<small class="badge bg-warning text-dark ms-1"><i class="bi bi-eye-slash"></i> Hidden</small>'
-                                ) : ''
-                            }
-                        </div>
-                    </div>                    <div class="d-flex gap-1">
-                        ${visibilityButton}
-                    </div>
-                </div>
-            </div>
-        `}).join('');
+        // Set up search functionality if not already done
+        if (!this.listSearchSetup) {
+            this.setupListSearch();
+            this.listSearchSetup = true;
+        }
 
-        container.innerHTML = listsHtml;
-    }    // Select a lead list
+        // Use the filter and display method
+        this.filterAndDisplayLists();
+    }// Select a lead list
     async selectList(listId) {
         try {
             this.selectedListId = listId;
@@ -86,7 +58,7 @@ class UploadManager {
             this.selectedListId = null;
             this.selectedList = null;
         }
-    }// Load details for selected list
+    }    // Load details for selected list
     async loadSelectedListDetails(listId) {
         try {
             const list = await this.apiManager.get(`/lead-lists/${listId}`);
@@ -116,9 +88,7 @@ class UploadManager {
                 this.showError('Failed to load list details');
             }
         }
-    }
-
-    // Render selected list details
+    }    // Render selected list details
     renderSelectedList(list, leads) {
         const selectedPanel = document.getElementById('selected-list-panel');
         const noSelectionPanel = document.getElementById('no-list-selected');
@@ -133,7 +103,7 @@ class UploadManager {
 
         if (titleElement) {
             titleElement.textContent = list.name;
-        }        if (infoElement) {
+        }if (infoElement) {
             // Check if user is admin to show visibility info
             const currentUser = this.apiManager.getCurrentUser();
             const isAdmin = currentUser && currentUser.role === 'admin';
@@ -165,54 +135,29 @@ class UploadManager {
                     </div>
                 </div>
             `;
+        }        if (leadsElement) {
+            this.renderListLeadsWithPagination(leads);
+        }
+    }
+
+    // Render leads for the selected list with pagination
+    renderListLeadsWithPagination(leads) {
+        // Store all leads for filtering and pagination
+        this.allLeads = leads;
+        this.currentPage = 1; // Reset to first page when selecting a new list
+        
+        // Set up filters if not already done
+        if (!this.filterListenersSetup) {
+            this.setupUploadFilters();
+            this.filterListenersSetup = true;
         }
 
-        if (leadsElement) {
-            this.renderListLeads(leads);
-        }
-    }    // Render leads for the selected list
+        // Apply current filters and display leads
+        this.applyFiltersAndDisplay();
+    }    // Render leads for the selected list (legacy method - now calls pagination version)
     renderListLeads(leads) {
-        const leadsElement = document.getElementById('selected-list-leads');
-        if (!leadsElement) return;
-
-        if (leads.length === 0) {
-            leadsElement.innerHTML = `
-                <div class="text-center text-muted py-4">
-                    <i class="bi bi-person-plus fs-1"></i>
-                    <p class="mt-2">No leads in this list yet</p>
-                    <button class="btn btn-primary" onclick="window.uploadManager.showBulkAddModal()">
-                        Add First Leads
-                    </button>
-                </div>
-            `;
-            return;
-        }        // Generate table headers dynamically based on list labels
-        const headers = [];
-        if (this.selectedList && this.selectedList.labels) {
-            this.selectedList.labels.forEach(label => {
-                headers.push(label.label);
-            });
-        }        // Add Status as a standard header
-        headers.push('Status');
-        headers.push('Actions');
-
-        const tableHtml = `
-            <div class="table-responsive">
-                <table class="table table-sm table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            ${headers.map(header => `<th>${header}</th>`).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${leads.map(lead => this.renderLeadRow(lead)).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-
-        leadsElement.innerHTML = tableHtml;
-    }    // Render individual lead row
+        this.renderListLeadsWithPagination(leads);
+    }// Render individual lead row
     renderLeadRow(lead) {
         let customFieldsCells = '';
         
@@ -272,10 +217,11 @@ class UploadManager {
                 labels: labels,
                 isVisibleToUsers: isVisibleToUsers,
                 visibleToSpecificAgents: visibleToSpecificAgents
-            });
-
-            this.showSuccess('Lead list created successfully');
+            });            this.showSuccess('Lead list created successfully');
             await this.loadLeadLists();
+
+            // Navigate to the page containing the new list
+            this.navigateToListPage(newList._id);
 
             // Also refresh Leads section if it exists, so agents see new lists immediately  
             if (window.leadsManager && typeof window.leadsManager.refreshLeadsData === 'function') {
@@ -291,9 +237,13 @@ class UploadManager {
 
         } catch (error) {
             console.error('Error creating list:', error);
-            this.showError('Failed to create lead list');
-        }
-    }// Update lead list    // Delete lead list    // Bulk add leads to selected list
+            this.showError('Failed to create lead list');        }
+    }
+
+    // Update lead list    
+    // Delete lead list    
+    
+    // Bulk add leads to selected list
     async bulkAddLeads(leadsData) {
         if (!this.selectedListId) {
             this.showError('No list selected');
@@ -301,6 +251,11 @@ class UploadManager {
         }
 
         try {
+            // Show loading message for large uploads
+            if (leadsData.length > 100) {
+                this.showSuccess(`Processing ${leadsData.length} leads... This may take a moment.`);
+            }
+
             const result = await this.apiManager.post(`/lead-lists/${this.selectedListId}/bulk-leads`, {
                 leads: leadsData
             });
@@ -317,9 +272,15 @@ class UploadManager {
 
         } catch (error) {
             console.error('Error adding leads:', error);
-            this.showError('Failed to add leads to list');
+            if (error.message.includes('timeout')) {
+                this.showError('Upload timed out. Please try with smaller batches or contact support.');
+            } else {
+                this.showError('Failed to add leads to list: ' + error.message);
+            }
         }
-    }    // Generate bulk add form based on list-specific labels
+    }
+
+    // Generate bulk add form based on list-specific labels
     generateBulkAddForm() {
         const formContainer = document.getElementById('bulk-add-form-container');
         if (!formContainer) return;
@@ -426,9 +387,20 @@ class UploadManager {
         if (maxLines === 0) {
             previewElement.textContent = 'Enter values in any field to see how many leads will be created';
         } else {
-            previewElement.innerHTML = `<strong>${maxLines} lead${maxLines === 1 ? '' : 's'} will be created:</strong> ${sampleValues.join(', ')}${maxLines > 3 ? ` and ${maxLines - 3} more...` : ''}`;
+            let warningClass = '';
+            let warningText = '';
+            
+            if (maxLines > 500) {
+                warningClass = 'text-warning';
+                warningText = ' ⚠️ Large upload - may take several minutes';
+            } else if (maxLines > 1000) {
+                warningClass = 'text-danger';
+                warningText = ' ⚠️ Very large upload - consider splitting into batches';
+            }
+            
+            previewElement.innerHTML = `<strong class="${warningClass}">${maxLines} lead${maxLines === 1 ? '' : 's'} will be created:</strong> ${sampleValues.join(', ')}${maxLines > 3 ? ` and ${maxLines - 3} more...` : ''}${warningText}`;
         }
-    }    // Process bulk add form submission
+    }// Process bulk add form submission
     async processBulkAddForm(formData) {
         // Get hardcoded status field
         const defaultStatus = formData.get('status') || 'new';
@@ -805,19 +777,27 @@ class UploadManager {
         if (!isVisibleToUsers) {
             const agentCheckboxes = document.querySelectorAll('input[name="specificAgents"]:checked');
             visibleToSpecificAgents = Array.from(agentCheckboxes).map(checkbox => checkbox.value);
-        }
-
-        // Process custom labels
+        }        // Process custom labels
         const labels = [];
         const container = document.getElementById('create-labels-container');
         const labelRows = container?.querySelectorAll('.custom-label-row') || [];
 
-        labelRows.forEach((row, index) => {
-            const labelName = formData.get(`labels[${index}][name]`);
-            const labelLabel = formData.get(`labels[${index}][label]`);
-            const labelType = formData.get(`labels[${index}][type]`);
-            const labelRequired = formData.get(`labels[${index}][required]`) === 'true';
-            const labelOptions = formData.get(`labels[${index}][options]`);
+        labelRows.forEach((row) => {
+            // Extract the actual index from the input name attribute
+            const nameInput = row.querySelector('input[name*="[name]"]');
+            if (!nameInput) return;
+            
+            const nameAttr = nameInput.getAttribute('name');
+            const indexMatch = nameAttr.match(/labels\[(\d+)\]/);
+            if (!indexMatch) return;
+            
+            const actualIndex = indexMatch[1];
+            
+            const labelName = formData.get(`labels[${actualIndex}][name]`);
+            const labelLabel = formData.get(`labels[${actualIndex}][label]`);
+            const labelType = formData.get(`labels[${actualIndex}][type]`);
+            const labelRequired = formData.get(`labels[${actualIndex}][required]`) === 'true';
+            const labelOptions = formData.get(`labels[${actualIndex}][options]`);
 
             if (labelName && labelLabel) {
                 const label = {
@@ -970,11 +950,15 @@ class UploadManager {
             console.error('Error updating list:', error);
             this.showError('Failed to update lead list');
         }
-    }
-
-    // Delete lead list
+    }    // Delete lead list
     async deleteList(listId) {
-        if (!confirm('Are you sure you want to delete this list? This will also remove all leads in the list.')) {
+        const confirmed = await window.confirmationModal.confirmDelete(
+            'this list',
+            'list',
+            'This will also remove all leads in the list.'
+        );
+        
+        if (!confirmed) {
             return;
         }
 
@@ -994,25 +978,67 @@ class UploadManager {
             console.error('Error deleting list:', error);
             this.showError('Failed to delete lead list');
         }
-    }
-
-    // Confirm delete list from edit modal
-    confirmDeleteList() {
+    }    // Confirm delete list from edit modal
+    async confirmDeleteList() {
         const listId = document.getElementById('editListId').value;
         const listName = document.getElementById('editListName').value;
         
-        if (confirm(`Are you sure you want to delete "${listName}"?\n\nThis will permanently delete the list and all associated leads. This action cannot be undone.`)) {
+        const confirmed = await window.confirmationModal.confirmDelete(
+            listName,
+            'list',
+            'This will permanently delete the list and all associated leads. This action cannot be undone.'
+        );
+        
+        if (confirmed) {
             this.deleteList(listId);
             
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('editListModal'));
             modal.hide();
         }
+    }    // Confirm delete list from card view
+    async confirmDeleteListFromCard(listId, listName, leadCount) {
+        const confirmed = await window.confirmationModal.confirmDelete(
+            listName,
+            'list',
+            `This list contains ${leadCount} lead${leadCount !== 1 ? 's' : ''}. This will permanently delete the list and all associated leads. This action cannot be undone.`
+        );
+        
+        if (confirmed) {
+            this.deleteListById(listId);
+        }
     }
 
-    // Remove lead from list
+    // Delete list by ID (for card view delete)
+    async deleteListById(listId) {
+        try {
+            await this.apiManager.delete(`/lead-lists/${listId}?hard=true`);
+            this.showSuccess('Lead list deleted successfully');
+            
+            // Reload the lists
+            await this.loadLeadLists();
+            
+            // If this was the selected list, clear the selection
+            if (this.selectedListId === listId) {
+                this.selectedListId = null;
+                this.selectedList = null;
+                this.allLeads = [];
+                this.filteredLeads = [];
+                this.renderLeads([]);
+            }
+        } catch (error) {
+            console.error('Error deleting lead list:', error);
+            this.showError('Failed to delete lead list');
+        }
+    }    // Remove lead from list
     async removeLead(leadId) {
-        if (!confirm('Are you sure you want to remove this lead from the list?')) {
+        const confirmed = await window.confirmationModal.confirmDelete(
+            'this lead',
+            'lead',
+            'This will remove the lead from the current list.'
+        );
+        
+        if (!confirmed) {
             return;
         }
 
@@ -1147,6 +1173,560 @@ class UploadManager {
     // Show error message
     showError(message) {
         this.apiManager.showAlert(message, 'danger', 'list-error');    }
+
+    // Set up event listeners for upload filters
+    setupUploadFilters() {
+        const searchInput = document.getElementById('upload-lead-search');
+        const statusFilter = document.getElementById('upload-lead-status-filter');
+        
+        // Set up search input listener
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                this.currentPage = 1; // Reset to first page when filtering
+                this.applyFiltersAndDisplay();
+            });
+        }
+        
+        // Set up status filter listener
+        if (statusFilter) {
+            statusFilter.addEventListener('change', () => {
+                this.currentPage = 1; // Reset to first page when filtering
+                this.applyFiltersAndDisplay();
+            });
+        }
+    }
+
+    // Apply filters and display leads with pagination
+    applyFiltersAndDisplay() {
+        const searchInput = document.getElementById('upload-lead-search');
+        const statusFilter = document.getElementById('upload-lead-status-filter');
+        
+        let filteredLeads = [...this.allLeads];
+        
+        // Apply search filter
+        if (searchInput && searchInput.value) {
+            const searchTerm = searchInput.value.toLowerCase();
+            filteredLeads = filteredLeads.filter(lead => {
+                // Search in standard fields
+                const standardMatch = lead.fullName?.toLowerCase().includes(searchTerm) || 
+                                    lead.email?.toLowerCase().includes(searchTerm) || 
+                                    lead.phone?.toLowerCase().includes(searchTerm);
+                
+                // Search in list-specific custom fields
+                let customMatch = false;
+                if (this.selectedList && this.selectedList.labels) {
+                    customMatch = this.selectedList.labels.some(label => {
+                        const value = lead.customFields?.[label.name];
+                        return value && value.toString().toLowerCase().includes(searchTerm);
+                    });
+                }
+                
+                return standardMatch || customMatch;
+            });
+        }
+        
+        // Apply status filter
+        if (statusFilter && statusFilter.value && statusFilter.value !== '') {
+            filteredLeads = filteredLeads.filter(lead => lead.status === statusFilter.value);
+        }
+        
+        // Store filtered leads for pagination
+        this.filteredLeads = filteredLeads;
+        
+        // Calculate pagination
+        this.totalPages = Math.ceil(filteredLeads.length / this.leadsPerPage);
+        if (this.currentPage > this.totalPages) {
+            this.currentPage = Math.max(1, this.totalPages);
+        }
+        
+        // Display leads with pagination
+        this.displayLeadsWithPagination(filteredLeads);
+    }    // Display leads with pagination
+    displayLeadsWithPagination(leads) {
+        const leadsElement = document.getElementById('selected-list-leads');
+        const paginationSection = document.getElementById('upload-pagination-section');
+        
+        if (!leadsElement) return;
+
+        if (leads.length === 0) {
+            leadsElement.innerHTML = `
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-person-plus fs-1"></i>
+                    <p class="mt-2">No leads found</p>
+                    <button class="btn btn-primary" onclick="window.uploadManager.showBulkAddModal()">
+                        Add First Leads
+                    </button>
+                </div>
+            `;
+            if (paginationSection) paginationSection.style.display = 'none';
+            return;
+        }
+
+        // Show pagination section
+        if (paginationSection) paginationSection.style.display = 'flex';
+
+        // Calculate start and end indices for current page
+        const startIndex = (this.currentPage - 1) * this.leadsPerPage;
+        const endIndex = Math.min(startIndex + this.leadsPerPage, leads.length);
+        const currentPageLeads = leads.slice(startIndex, endIndex);
+
+        // Generate table headers dynamically based on list labels
+        const headers = [];
+        if (this.selectedList && this.selectedList.labels) {
+            this.selectedList.labels.forEach(label => {
+                headers.push(label.label);
+            });
+        }
+        
+        // Add Status and Actions as standard headers
+        headers.push('Status');
+        headers.push('Actions');
+
+        const tableHtml = `
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            ${headers.map(header => `<th>${header}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${currentPageLeads.map(lead => this.renderLeadRow(lead)).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        leadsElement.innerHTML = tableHtml;
+        
+        // Update pagination controls
+        this.updatePaginationControls();
+    }
+    
+    // Update pagination controls
+    updatePaginationControls() {
+        const paginationContainer = document.getElementById('upload-leads-pagination');
+        const paginationInfo = document.getElementById('upload-pagination-info');
+        const leadsPerPageSelect = document.getElementById('upload-leads-per-page');
+        
+        if (!paginationContainer) return;
+        
+        // Update pagination info
+        if (paginationInfo) {
+            const totalLeads = this.filteredLeads.length;
+            if (totalLeads === 0) {
+                paginationInfo.textContent = 'No leads to display';
+            } else {
+                const startIndex = (this.currentPage - 1) * this.leadsPerPage + 1;
+                const endIndex = Math.min(this.currentPage * this.leadsPerPage, totalLeads);
+                paginationInfo.textContent = `Showing ${startIndex}-${endIndex} of ${totalLeads} leads`;
+            }
+        }
+        
+        // Set up leads per page selector if not already done
+        if (leadsPerPageSelect && !leadsPerPageSelect.dataset.listenerAdded) {
+            leadsPerPageSelect.value = this.leadsPerPage.toString();
+            leadsPerPageSelect.addEventListener('change', (e) => {
+                this.leadsPerPage = parseInt(e.target.value);
+                this.currentPage = 1; // Reset to first page
+                this.applyFiltersAndDisplay();
+            });
+            leadsPerPageSelect.dataset.listenerAdded = 'true';
+        }
+        
+        // Clear existing pagination
+        paginationContainer.innerHTML = '';
+        
+        if (this.totalPages <= 1) {
+            return; // No pagination needed
+        }
+        
+        // Create pagination
+        const pagination = document.createElement('nav');
+        pagination.setAttribute('aria-label', 'Upload leads pagination');
+        
+        const ul = document.createElement('ul');
+        ul.className = 'pagination pagination-sm mb-0';
+        
+        // Previous button
+        const prevLi = document.createElement('li');
+        prevLi.className = `page-item ${this.currentPage === 1 ? 'disabled' : ''}`;
+        prevLi.innerHTML = `
+            <a class="page-link" href="#" aria-label="Previous">
+                <span aria-hidden="true">&laquo;</span>
+            </a>
+        `;
+        if (this.currentPage > 1) {
+            prevLi.querySelector('a').addEventListener('click', (e) => {
+                e.preventDefault();
+                this.goToPage(this.currentPage - 1);
+            });
+        }
+        ul.appendChild(prevLi);
+        
+        // Page numbers
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, this.currentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(this.totalPages, startPage + maxVisiblePages - 1);
+        
+        // Adjust start page if we're near the end
+        if (endPage - startPage < maxVisiblePages - 1) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+        
+        // First page + ellipsis
+        if (startPage > 1) {
+            const firstLi = document.createElement('li');
+            firstLi.className = 'page-item';
+            firstLi.innerHTML = '<a class="page-link" href="#">1</a>';
+            firstLi.querySelector('a').addEventListener('click', (e) => {
+                e.preventDefault();
+                this.goToPage(1);
+            });
+            ul.appendChild(firstLi);
+            
+            if (startPage > 2) {
+                const ellipsisLi = document.createElement('li');
+                ellipsisLi.className = 'page-item disabled';
+                ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                ul.appendChild(ellipsisLi);
+            }
+        }
+        
+        // Page number buttons
+        for (let i = startPage; i <= endPage; i++) {
+            const li = document.createElement('li');
+            li.className = `page-item ${i === this.currentPage ? 'active' : ''}`;
+            li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+            
+            if (i !== this.currentPage) {
+                li.querySelector('a').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.goToPage(i);
+                });
+            }
+            ul.appendChild(li);
+        }
+        
+        // Last page + ellipsis
+        if (endPage < this.totalPages) {
+            if (endPage < this.totalPages - 1) {
+                const ellipsisLi = document.createElement('li');
+                ellipsisLi.className = 'page-item disabled';
+                ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                ul.appendChild(ellipsisLi);
+            }
+            
+            const lastLi = document.createElement('li');
+            lastLi.className = 'page-item';
+            lastLi.innerHTML = `<a class="page-link" href="#">${this.totalPages}</a>`;
+            lastLi.querySelector('a').addEventListener('click', (e) => {
+                e.preventDefault();
+                this.goToPage(this.totalPages);
+            });
+            ul.appendChild(lastLi);
+        }
+        
+        // Next button
+        const nextLi = document.createElement('li');
+        nextLi.className = `page-item ${this.currentPage === this.totalPages ? 'disabled' : ''}`;
+        nextLi.innerHTML = `
+            <a class="page-link" href="#" aria-label="Next">
+                <span aria-hidden="true">&raquo;</span>
+            </a>
+        `;
+        if (this.currentPage < this.totalPages) {
+            nextLi.querySelector('a').addEventListener('click', (e) => {
+                e.preventDefault();
+                this.goToPage(this.currentPage + 1);
+            });
+        }
+        ul.appendChild(nextLi);
+        
+        pagination.appendChild(ul);
+        paginationContainer.appendChild(pagination);
+    }
+    
+    // Go to specific page
+    goToPage(page) {
+        if (page < 1 || page > this.totalPages) return;
+        this.currentPage = page;
+        this.applyFiltersAndDisplay();
+    }
+    
+    // Render lists pagination
+    renderListsPagination() {
+        if (this.listsTotalPages <= 1) {
+            return ''; // No pagination needed
+        }
+
+        let paginationHtml = `
+            <div class="d-flex justify-content-between align-items-center mt-3">
+                <small class="text-muted">
+                    Showing ${(this.listsCurrentPage - 1) * this.listsPerPage + 1}-${Math.min(this.listsCurrentPage * this.listsPerPage, this.allLists.length)} of ${this.allLists.length} lists
+                </small>
+                <nav aria-label="Lists pagination">
+                    <ul class="pagination pagination-sm mb-0">
+        `;
+
+        // Previous button
+        paginationHtml += `
+            <li class="page-item ${this.listsCurrentPage === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="event.preventDefault(); ${this.listsCurrentPage > 1 ? 'window.uploadManager.goToListsPage(' + (this.listsCurrentPage - 1) + ')' : ''}" aria-label="Previous">
+                    <span aria-hidden="true">&laquo;</span>
+                </a>
+            </li>
+        `;
+
+        // Page numbers
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, this.listsCurrentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(this.listsTotalPages, startPage + maxVisiblePages - 1);
+
+        // Adjust start page if we're near the end
+        if (endPage - startPage < maxVisiblePages - 1) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+
+        // First page + ellipsis
+        if (startPage > 1) {
+            paginationHtml += `
+                <li class="page-item">
+                    <a class="page-link" href="#" onclick="event.preventDefault(); window.uploadManager.goToListsPage(1)">1</a>
+                </li>
+            `;
+            if (startPage > 2) {
+                paginationHtml += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+        }
+
+        // Page numbers
+        for (let i = startPage; i <= endPage; i++) {
+            paginationHtml += `
+                <li class="page-item ${i === this.listsCurrentPage ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="event.preventDefault(); window.uploadManager.goToListsPage(${i})">${i}</a>
+                </li>
+            `;
+        }
+        
+        // Last page + ellipsis
+        if (endPage < this.listsTotalPages) {
+            if (endPage < this.listsTotalPages - 1) {
+                paginationHtml += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+            paginationHtml += `
+                <li class="page-item">
+                    <a class="page-link" href="#" onclick="event.preventDefault(); window.uploadManager.goToListsPage(${this.listsTotalPages})">${this.listsTotalPages}</a>
+                </li>
+            `;
+        }
+
+        // Next button
+        paginationHtml += `
+            <li class="page-item ${this.listsCurrentPage === this.listsTotalPages ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="event.preventDefault(); ${this.listsCurrentPage < this.listsTotalPages ? 'window.uploadManager.goToListsPage(' + (this.listsCurrentPage + 1) + ')' : ''}" aria-label="Next">
+                    <span aria-hidden="true">&raquo;</span>
+                </a>
+            </li>
+        `;
+
+        paginationHtml += `
+                    </ul>
+                </nav>
+            </div>
+        `;
+
+        return paginationHtml;
+    }    // Go to specific lists page
+    goToListsPage(page) {
+        if (page < 1 || page > this.listsTotalPages) return;
+        this.listsCurrentPage = page;
+        this.filterAndDisplayLists(); // Use filtered display instead of renderLeadLists
+    }    // Navigate to the page containing a specific list
+    navigateToListPage(listId) {
+        if (!this.allLists || this.allLists.length === 0) return;
+        
+        const searchInput = document.getElementById('list-search');
+        const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        
+        let filteredLists = [...this.allLists];
+        
+        // Apply search filter
+        if (searchTerm) {
+            filteredLists = filteredLists.filter(list => 
+                list.name.toLowerCase().includes(searchTerm) ||
+                (list.description && list.description.toLowerCase().includes(searchTerm))
+            );
+        }
+        
+        // Find the index of the list
+        const listIndex = filteredLists.findIndex(list => list._id === listId);
+        
+        if (listIndex !== -1) {
+            // List is visible with current search, navigate to its page
+            const targetPage = Math.ceil((listIndex + 1) / this.listsPerPage);
+            this.listsCurrentPage = targetPage;
+            
+            // Update pagination and display
+            this.listsTotalPages = Math.ceil(filteredLists.length / this.listsPerPage);
+            this.renderFilteredLeadLists(filteredLists);
+        } else if (searchTerm) {
+            // List is not visible due to search filter, clear search to show the new list
+            if (searchInput) {
+                searchInput.value = '';
+            }
+            // Recalculate without search filter
+            filteredLists = [...this.allLists];
+            const newListIndex = filteredLists.findIndex(list => list._id === listId);
+            
+            if (newListIndex !== -1) {
+                const targetPage = Math.ceil((newListIndex + 1) / this.listsPerPage);
+                this.listsCurrentPage = targetPage;
+                
+                // Update pagination and display
+                this.listsTotalPages = Math.ceil(filteredLists.length / this.listsPerPage);
+                this.renderFilteredLeadLists(filteredLists);
+            }
+        }
+    }
+
+    // Set up list search functionality
+    setupListSearch() {
+        const searchInput = document.getElementById('list-search');
+        const clearButton = document.getElementById('clear-list-search');
+        
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                this.filterAndDisplayLists();
+            });
+        }
+        
+        if (clearButton) {
+            clearButton.addEventListener('click', () => {
+                searchInput.value = '';
+                this.filterAndDisplayLists();
+            });
+        }
+    }    // Filter and display lists based on search
+    filterAndDisplayLists() {
+        const searchInput = document.getElementById('list-search');
+        const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        
+        let filteredLists = [...this.allLists];
+        
+        // Apply search filter
+        if (searchTerm) {
+            filteredLists = filteredLists.filter(list => 
+                list.name.toLowerCase().includes(searchTerm) ||
+                (list.description && list.description.toLowerCase().includes(searchTerm))
+            );
+            // Reset pagination to first page only when searching
+            this.listsCurrentPage = 1;
+        }
+        
+        // Update pagination based on filtered results
+        this.listsTotalPages = Math.ceil(filteredLists.length / this.listsPerPage);
+        
+        // Ensure current page is within bounds
+        if (this.listsCurrentPage > this.listsTotalPages) {
+            this.listsCurrentPage = Math.max(1, this.listsTotalPages);
+        }
+          // Render the filtered lists
+        this.renderFilteredLeadLists(filteredLists);
+    }
+
+    // Render filtered lead lists
+    renderFilteredLeadLists(lists) {
+        const container = document.getElementById('lead-lists-container');
+        if (!container) return;
+
+        if (lists.length === 0) {
+            const searchInput = document.getElementById('list-search');
+            const searchTerm = searchInput ? searchInput.value.trim() : '';
+            
+            if (searchTerm) {
+                container.innerHTML = `
+                    <div class="text-center text-muted">
+                        <i class="bi bi-search fs-1"></i>
+                        <p class="mt-2">No lists found matching "${searchTerm}"</p>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('list-search').value = ''; window.uploadManager.filterAndDisplayLists();">
+                            Clear Search
+                        </button>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="text-center text-muted">
+                        <i class="bi bi-list-ul fs-1"></i>
+                        <p class="mt-2">No lists created yet</p>
+                        <button class="btn btn-sm btn-outline-primary" onclick="window.uploadManager.showCreateListModal()">
+                            Create First List
+                        </button>
+                    </div>
+                `;
+            }
+            return;
+        }
+
+        // Get current page lists from filtered results
+        const startIndex = (this.listsCurrentPage - 1) * this.listsPerPage;
+        const endIndex = Math.min(startIndex + this.listsPerPage, lists.length);
+        const currentPageLists = lists.slice(startIndex, endIndex);
+
+        // Check if user is admin to show visibility controls
+        const currentUser = this.apiManager.getCurrentUser();
+        const isAdmin = currentUser && currentUser.role === 'admin';        const listsHtml = currentPageLists.map(list => {
+            // Create visibility toggle button and delete button for admins
+            const adminButtons = isAdmin ? `
+                <div class="btn-group" role="group">
+                    <button class="btn btn-sm ${list.isVisibleToUsers ? 'btn-success' : 'btn-outline-secondary'}" 
+                            onclick="event.stopPropagation(); window.uploadManager.toggleListVisibility('${list._id}', ${list.isVisibleToUsers})"
+                            title="${list.isVisibleToUsers ? 'Click to hide from agents' : 'Click to show to agents'}">
+                        <i class="bi ${list.isVisibleToUsers ? 'bi-eye' : 'bi-eye-slash'} me-1"></i>
+                        ${list.isVisibleToUsers ? 'Visible' : 'Hidden'}
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" 
+                            onclick="event.stopPropagation(); window.uploadManager.confirmDeleteListFromCard('${list._id}', '${list.name.replace(/'/g, "\\'")}', ${list.leadCount || 0})"
+                            title="Delete this list">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            ` : '';
+            
+            return `
+            <div class="col-md-6 mb-3">
+                <div class="card h-100 cursor-pointer ${this.selectedListId === list._id ? 'border-primary bg-light' : ''}" 
+                     onclick="window.uploadManager.selectList('${list._id}')">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="card-title mb-0">${list.name}</h6>
+                            ${adminButtons}
+                        </div>
+                        <p class="card-text text-muted small">${list.description || 'No description'}</p>
+                        <div class="mt-auto">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="badge bg-secondary">${list.leadCount || 0} leads</small>
+                                <small class="text-muted">${new Date(list.createdAt).toLocaleDateString()}</small>
+                            </div>
+                            ${list.isVisibleToUsers === false ? 
+                                (list.visibleToSpecificAgents && list.visibleToSpecificAgents.length > 0 ? 
+                                    `<div class="mt-1"><small class="badge bg-info text-dark"><i class="bi bi-person-check"></i> Visible only to: ${list.visibleToSpecificAgents.map(agent => agent.name).join(', ')}</small></div>` :
+                                    '<div class="mt-1"><small class="badge bg-warning text-dark"><i class="bi bi-eye-slash"></i> Hidden</small></div>'
+                                ) : ''
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `}).join('');
+
+        container.innerHTML = `
+            <div class="row">
+                ${listsHtml}
+            </div>
+            ${this.renderListsPagination()}
+        `;
+    }
 }
 
 // Create global instance

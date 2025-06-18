@@ -12,7 +12,7 @@ const { User, Lead, LeadField, LeadList, Customer, Depositor } = require('./mode
 dotenv.config();
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Increased limit for bulk lead uploads
 app.use(express.static(path.join(__dirname, 'public')));
 
 mongoose.connect(process.env.MONGODB_URI)
@@ -791,6 +791,37 @@ app.delete('/api/users/:id', authenticate, async (req, res) => {
     }
 });
 
+// Deactivate all users endpoint (Admin only)
+app.post('/api/users/deactivate-all', authenticate, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Admin access required' });
+        }
+        
+        // Deactivate all users except the current admin
+        const result = await User.updateMany(
+            { 
+                _id: { $ne: req.user.id }, // Exclude current user
+                status: 'active' // Only update active users
+            },
+            { 
+                status: 'inactive',
+                updatedAt: new Date()
+            }
+        );
+        
+        console.log(`Admin ${req.user.email} deactivated ${result.modifiedCount} users`);
+        
+        res.json({ 
+            message: `Successfully deactivated ${result.modifiedCount} user(s)`,
+            deactivatedCount: result.modifiedCount
+        });
+    } catch (error) {
+        console.error('Bulk user deactivation error:', error);
+        res.status(500).json({ message: 'Failed to deactivate users' });
+    }
+});
+
 // Lead Field Management Routes (Admin only)
 app.get('/api/lead-fields', authenticate, async (req, res) => {
     try {
@@ -1052,12 +1083,32 @@ app.post('/api/lead-lists/:id/bulk-leads', authenticate, async (req, res) => {
             status: lead.status || 'new'
         }));
         
-        const insertedLeads = await Lead.insertMany(leadsWithList);
+        // Process leads in batches to avoid memory issues with large datasets
+        const BATCH_SIZE = 100;
+        let totalInserted = 0;
+        const insertedLeads = [];
+        
+        for (let i = 0; i < leadsWithList.length; i += BATCH_SIZE) {
+            const batch = leadsWithList.slice(i, i + BATCH_SIZE);
+            console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(leadsWithList.length / BATCH_SIZE)} (${batch.length} leads)`);
+            
+            try {
+                const batchResult = await Lead.insertMany(batch);
+                insertedLeads.push(...batchResult);
+                totalInserted += batchResult.length;
+            } catch (batchError) {
+                console.error(`Error in batch ${Math.floor(i / BATCH_SIZE) + 1}:`, batchError);
+                // Continue with next batch instead of failing completely
+            }
+        }
+        
+        console.log(`Bulk insert completed: ${totalInserted}/${leadsWithList.length} leads inserted successfully`);
         
         res.json({ 
-            message: 'Leads added successfully',
-            inserted: insertedLeads.length,
-            leads: insertedLeads
+            message: `Leads added successfully: ${totalInserted}/${leadsWithList.length} inserted`,
+            inserted: totalInserted,
+            total: leadsWithList.length,
+            leads: insertedLeads.slice(0, 10) // Return only first 10 for response size optimization
         });
     } catch (error) {
         console.error('Bulk leads creation error:', error);
@@ -1215,7 +1266,8 @@ app.post('/api/customers/:id/release', authenticate, async (req, res) => {
             // Add note about customer release
             if (!originalLead.notes) {
                 originalLead.notes = [];
-            }            // Replace the lead's notes array with customer notes plus release note
+            }
+            // Replace the lead's notes array with customer notes plus release note
             originalLead.notes = [
                 ...(customer.notes || []).map(note => ({
                     content: note.content,

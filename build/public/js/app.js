@@ -354,7 +354,7 @@ async function toggleUserStatus(userId, newStatus) {
         loadUsers();
     } catch (err) {
         console.error('Error updating user status:', err);
-        alert('Failed to update user status: ' + err.message);
+        window.apiManager.showAlert('Failed to update user status: ' + err.message, 'danger');
     }
 }
 
@@ -365,10 +365,8 @@ async function handleAddUser() {
         email: document.getElementById('user-email')?.value || '',
         password: document.getElementById('user-password')?.value || '',
         role: document.getElementById('user-role')?.value || 'agent'
-    };
-
-    if (!userData.name || !userData.email || !userData.password) {
-        alert('Please fill in all required fields');
+    };    if (!userData.name || !userData.email || !userData.password) {
+        window.apiManager.showAlert('Please fill in all required fields', 'warning');
         return;
     }
 
@@ -396,10 +394,10 @@ async function handleAddUser() {
         // Reload users
         loadUsers();
         
-        alert('User added successfully');
+        window.apiManager.showAlert('User added successfully', 'success');
     } catch (err) {
         console.error('Error adding user:', err);
-        alert('Failed to add user: ' + err.message);
+        window.apiManager.showAlert('Failed to add user: ' + err.message, 'danger');
     }
 }
 
@@ -425,7 +423,7 @@ async function handleUpdateUser() {
         const role = document.getElementById('edit-user-role').value;
 
         if (!name || !email) {
-            alert('Please fill in all required fields');
+            window.apiManager.showAlert('Please fill in all required fields', 'warning');
             return;
         }
 
@@ -448,24 +446,28 @@ async function handleUpdateUser() {
             // Close modal
             const editUserModal = bootstrap.Modal.getInstance(document.getElementById('editUserModal'));
             editUserModal.hide();
-            
-            // Reload users list
+              // Reload users list
             loadUsers();
             
-            alert('User updated successfully');
-        } else {
+            window.apiManager.showAlert('User updated successfully', 'success');        } else {
             const errorData = await response.json();
-            alert(errorData.message || 'Failed to update user');
+            window.apiManager.showAlert(errorData.message || 'Failed to update user', 'danger');
         }
     } catch (err) {
         console.error('Error updating user:', err);
-        alert('Error updating user. Please try again.');
+        window.apiManager.showAlert('Error updating user. Please try again.', 'danger');
     }
 }
 
 // Delete user with confirmation
 async function deleteUser(userId, userName) {
-    if (!confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone.`)) {
+    const confirmed = await window.confirmationModal.confirmDelete(
+        userName, 
+        'user', 
+        'This action cannot be undone.'
+    );
+    
+    if (!confirmed) {
         return;
     }
 
@@ -477,14 +479,52 @@ async function deleteUser(userId, userName) {
         if (response.ok) {
             // Reload users list
             loadUsers();
-            alert('User deleted successfully');
+            window.apiManager.showAlert('User deleted successfully', 'success');
         } else {
             const errorData = await response.json();
-            alert(errorData.message || 'Failed to delete user');
+            window.apiManager.showAlert(errorData.message || 'Failed to delete user', 'danger');
         }
     } catch (err) {
         console.error('Error deleting user:', err);
-        alert('Error deleting user. Please try again.');
+        window.apiManager.showAlert('Error deleting user. Please try again.', 'danger');
+    }
+}
+
+// Deactivate all users (admin only)
+async function deactivateAllUsers() {
+    const confirmed = await window.confirmationModal.confirmDestructive(
+        'Are you sure you want to deactivate ALL users?',
+        'Deactivate All Users',
+        'This will deactivate all users except yourself. This action can be reversed by reactivating users individually.'
+    );
+    
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        const response = await window.apiManager.authenticatedFetch(`${window.apiManager.API_URL}/users/deactivate-all`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            // Reload users list to reflect changes
+            loadUsers();
+            window.apiManager.showAlert(
+                `Successfully deactivated ${result.deactivatedCount} user(s)`, 
+                'success'
+            );
+        } else {
+            const errorData = await response.json();
+            window.apiManager.showAlert(errorData.message || 'Failed to deactivate users', 'danger');
+        }
+    } catch (err) {
+        console.error('Error deactivating all users:', err);
+        window.apiManager.showAlert('Error deactivating users. Please try again.', 'danger');
     }
 }
 
@@ -583,3 +623,4 @@ function resetModalButtons() {
 
 // Expose the function globally for use by other modules
 window.resetModalButtons = resetModalButtons;
+window.deactivateAllUsers = deactivateAllUsers;

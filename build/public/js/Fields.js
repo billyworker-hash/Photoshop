@@ -218,11 +218,17 @@ class FieldsModule {
             console.error('Error updating field:', error);
             this.apiManager.showAlert(error.message || 'Error updating custom field', 'danger');
         }
-    }
-
-    async deleteField(fieldId) {
+    }    async deleteField(fieldId) {
         const field = this.fields.find(f => f._id === fieldId);
-        if (!field) return;        if (confirm(`Are you sure you want to delete the field "${field.label}"? This will remove all data stored in this field for existing leads.`)) {
+        if (!field) return;
+        
+        const confirmed = await window.confirmationModal.confirmDelete(
+            field.label,
+            'field',
+            'This will remove all data stored in this field for existing leads.'
+        );
+        
+        if (confirmed) {
             try {
                 await this.apiManager.delete(`/lead-fields/${fieldId}`);
                 this.apiManager.showAlert('Custom field deleted successfully', 'success');

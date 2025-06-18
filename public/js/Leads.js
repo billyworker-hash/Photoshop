@@ -933,7 +933,7 @@ class LeadsManager {    constructor(apiManager) {
             this.loadLeads();
         } catch (err) {
             console.error('Error adding lead:', err);
-            alert('Failed to add lead: ' + err.message);
+            this.apiManager.showAlert('Failed to add lead: ' + err.message, 'danger');
         }
     }    // Open edit lead modal
     openEditLeadModal(lead) {
@@ -1400,7 +1400,7 @@ class LeadsManager {    constructor(apiManager) {
         const targetListId = targetListSelect?.value;
         
         if (!targetListId) {
-            alert('Please select a target list');
+            this.apiManager.showAlert('Please select a target list', 'warning');
             return;
         }
         
@@ -1505,7 +1505,7 @@ class LeadsManager {    constructor(apiManager) {
             this.loadLeads();
         } catch (err) {
             console.error('Error updating lead:', err);
-            alert('Failed to update lead: ' + err.message);
+            this.apiManager.showAlert('Failed to update lead: ' + err.message, 'danger');
         }
     }    // Format lead status
     formatStatus(status) {

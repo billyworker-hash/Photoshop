@@ -227,27 +227,97 @@ body {
     overflow-y: auto;
 }
 
-/* Dashboard stats */
-.card .bi {
-    opacity: 0.8;
+/* Custom Confirmation Modal Styles */
+.modal-dialog-centered {
+    display: flex;
+    align-items: center;
+    min-height: calc(100% - 1rem);
 }
 
-/* Chart containers */
-.chart-container {
-    position: relative;
-    height: 300px !important;
-    width: 100%;
-    overflow: hidden;
+#custom-confirmation-modal .modal-content {
+    border-radius: 12px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+    border: none;
 }
 
-.chart-container canvas {
-    max-height: 300px !important;
+#custom-confirmation-modal .modal-header {
+    border-bottom: 1px solid #e9ecef;
+    padding: 1.5rem 1.5rem 1rem;
+    background-color: #f8f9fa;
+    border-radius: 12px 12px 0 0;
 }
 
-/* Ensure charts don't exceed their containers */
-#lead-trends-chart, #lead-sources-chart {
-    max-height: 300px !important;
-    height: 100% !important;
+#custom-confirmation-modal .modal-title {
+    font-weight: 600;
+    font-size: 1.2rem;
+    color: #495057;
+}
+
+#custom-confirmation-modal .modal-body {
+    padding: 1.5rem;
+}
+
+#custom-confirmation-modal .modal-footer {
+    border-top: 1px solid #e9ecef;
+    padding: 1rem 1.5rem 1.5rem;
+    background-color: #f8f9fa;
+    border-radius: 0 0 12px 12px;
+}
+
+#custom-confirmation-modal .btn {
+    border-radius: 8px;
+    padding: 0.6rem 1.5rem;
+    font-weight: 500;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+#custom-confirmation-modal .btn-secondary {
+    background-color: #6c757d;
+    box-shadow: 0 2px 4px rgba(108, 117, 125, 0.2);
+}
+
+#custom-confirmation-modal .btn-secondary:hover {
+    background-color: #5a6268;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(108, 117, 125, 0.3);
+}
+
+#custom-confirmation-modal .btn-danger {
+    background-color: #dc3545;
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+}
+
+#custom-confirmation-modal .btn-danger:hover {
+    background-color: #c82333;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+}
+
+#custom-confirmation-modal .btn-warning {
+    background-color: #ffc107;
+    color: #212529;
+    box-shadow: 0 2px 4px rgba(255, 193, 7, 0.2);
+}
+
+#custom-confirmation-modal .btn-warning:hover {
+    background-color: #e0a800;
+    color: #212529;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(255, 193, 7, 0.3);
+}
+
+#confirmation-modal-message {
+    font-size: 1.1rem;
+    color: #495057;
+    line-height: 1.5;
+}
+
+#confirmation-modal-details {
+    font-size: 0.9rem;
+    color: #6c757d;
+    font-style: italic;
+    margin-top: 0.5rem;
 }
 
 /* Animations */
@@ -1132,4 +1202,29 @@ body {
     .pagination .page-item:not(.active):not(:first-child):not(:last-child):not(:nth-last-child(2)):not(:nth-child(2)) {
         display: none;
     }
+}
+
+/* Deactivate All Users Button Styling */
+#deactivate-all-users-btn {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    border: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+}
+
+#deactivate-all-users-btn:hover {
+    background: linear-gradient(135deg, #c82333 0%, #a71e2a 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 12px rgba(220, 53, 69, 0.4);
+}
+
+#deactivate-all-users-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+}
+
+/* Ensure proper spacing between buttons in users page */
+#users-page .d-flex.gap-2 {
+    gap: 0.5rem !important;
 }
