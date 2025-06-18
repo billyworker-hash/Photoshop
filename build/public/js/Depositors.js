@@ -1,9 +1,7 @@
 // Depositors.js - Handle depositor list functionality (mirrors Customers.js structure)
-class DepositorManager {
-    constructor(apiManager) {
+class DepositorManager {    constructor(apiManager) {
         this.apiManager = apiManager;
         this.allDepositors = [];
-        this.currentDepositor = null;
     }
 
     // Load depositors - main entry point (mirrors loadCustomers)
@@ -214,7 +212,7 @@ class DepositorManager {
         rowHtml += `<td><span class="badge bg-secondary">${depositor.originalListName || 'Unknown List'}</span></td>`;
         
         // Add status dropdown
-        const statusOptions = ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'lead-released'];
+        const statusOptions = ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'];
         const currentStatus = depositor.status || 'new';
         rowHtml += `
             <td>
@@ -363,13 +361,9 @@ class DepositorManager {
             // Remove existing listeners to prevent duplicates
             const newReleaseBtn = releaseLeadBtn.cloneNode(true);
             releaseLeadBtn.parentNode.replaceChild(newReleaseBtn, releaseLeadBtn);
-              newReleaseBtn.addEventListener('click', () => {
-                this.releaseDepositorToCustomers(depositor._id);
+              newReleaseBtn.addEventListener('click', () => {                this.releaseDepositorToCustomers(depositor._id);
             });
         }
-        
-        // Set up the depositor data for reference
-        this.currentDepositor = depositor;
     }
 
     // Display depositor notes (mirrors displayCustomerNotes)
@@ -532,27 +526,12 @@ class DepositorManager {
         if (!phoneNumber) return '';
         // Remove all non-numeric characters except +
         return phoneNumber.replace(/[^\d+]/g, '');
-    }
-
-    // Format phone number for display with privacy (show only last 2 digits)
+    }    // Format phone number for display with just a phone icon to save space
     formatPhoneForDisplay(phoneNumber) {
         if (!phoneNumber) return '';
         
-        // Clean the phone number to get digits only
-        const cleanPhone = phoneNumber.replace(/[^\d]/g, '');
-        
-        if (cleanPhone.length < 2) {
-            return phoneNumber; // Return original if too short
-        }
-        
-        // Get last 2 digits
-        const lastTwoDigits = cleanPhone.slice(-2);
-        
-        // Create masked version with x's and last 2 digits
-        const maskedLength = cleanPhone.length - 2;
-        const masked = 'x'.repeat(maskedLength) + lastTwoDigits;
-        
-        return masked;
+        // Return a different phone icon to save maximum space
+        return '☎️';
     }// Release depositor back to customers list (hierarchy system)
     async releaseDepositorToCustomers(depositorId) {
         try {
@@ -691,15 +670,13 @@ class DepositorManager {
         toastElement.addEventListener('hidden.bs.toast', () => {
             toastElement.remove();
         });
-    }
-
-    // Apply color styling to dropdowns based on selected status
+    }    // Apply color styling to dropdowns based on selected status
     applyStatusColors() {
         document.querySelectorAll('.depositor-status-dropdown').forEach(dropdown => {
             const status = dropdown.value;
               // Remove existing status color classes
             dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail', 
-                                     'status-call-back-qualified', 'status-call-back-not-qualified', 'status-lead-released');
+                                     'status-call-back-qualified', 'status-call-back-not-qualified');
             
             // Add class based on current status
             switch(status) {
@@ -714,11 +691,9 @@ class DepositorManager {
                     break;
                 case 'Call Back Qualified':
                     dropdown.classList.add('status-call-back-qualified');
-                    break;                case 'Call Back NOT Qualified':
-                    dropdown.classList.add('status-call-back-not-qualified');
                     break;
-                case 'lead-released':
-                    dropdown.classList.add('status-lead-released');
+                case 'Call Back NOT Qualified':
+                    dropdown.classList.add('status-call-back-not-qualified');
                     break;
             }
         });

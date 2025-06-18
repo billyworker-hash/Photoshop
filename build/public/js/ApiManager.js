@@ -16,11 +16,8 @@ class ApiManager {
         const response = await fetch(url, {
             ...options,
             headers
-        });
-
-        // If unauthorized, redirect to login
+        });        // If unauthorized, redirect to login
         if (response.status === 401) {
-            console.log('Authentication failed, redirecting to login');
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             window.location.href = '/login';

@@ -40,18 +40,30 @@ const leadListSchema = new mongoose.Schema({
         },
         options: [String], // For select type fields
         required: { type: Boolean, default: false }
-    }],    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    }],
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Not required for system lists
+    isSystem: { type: Boolean, default: false }, // Flag to identify system lists
     isActive: { type: Boolean, default: true },
     isCustomerList: { type: Boolean, default: false }, // Flag to identify customer lists
-    isVisibleToUsers: { type: Boolean, default: true }, // Control whether users can see this list
-    visibleToSpecificAgents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Specific agents who can see this list (optional)
+    isVisibleToUsers: { type: Boolean, default: true }, // Control whether all agents can see this list
+    visibleToSpecificAgents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Specific agents who can see this list
+    // Keep old field for backward compatibility
+    isVisible: { type: Boolean, default: true },
     createdAt: { type: Date, default: Date.now }
+});
+
+// Add custom validation for createdBy field
+leadListSchema.pre('save', function(next) {
+    if (!this.isSystem && !this.createdBy) {
+        return next(new Error('createdBy is required for non-system lists'));
+    }
+    next();
 });
 
 // Lead Schema
 const leadSchema = new mongoose.Schema({    status: {
         type: String,
-        enum: ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'lead-released'],
+        enum: ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'],
         default: 'new'
     },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -73,7 +85,7 @@ const customerSchema = new mongoose.Schema({
     country: String,
     language: String,    status: {
         type: String,
-        enum: ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'lead-released', 'active', 'inactive'],
+        enum: ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'],
         default: 'new'
     },
     customFields: { type: Map, of: mongoose.Schema.Types.Mixed }, // Copy of lead's custom fields
@@ -107,7 +119,7 @@ const depositorSchema = new mongoose.Schema({
     country: String,
     language: String,    status: {
         type: String,
-        enum: ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'lead-released', 'deposited', 'active', 'withdrawn', 'inactive'],
+        enum: ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'],
         default: 'deposited'
     },
     customFields: { type: Map, of: mongoose.Schema.Types.Mixed }, // Copy of customer's custom fields

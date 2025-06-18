@@ -41,13 +41,13 @@ class UploadManager {
             // Check if user is admin to show visibility controls
             const currentUser = this.apiManager.getCurrentUser();
             const isAdmin = currentUser && currentUser.role === 'admin';
-            
-            // Create visibility toggle button for admins
+              // Create visibility toggle button for admins
             const visibilityButton = isAdmin ? `
-                <button class="btn btn-sm ${list.isVisibleToUsers !== false ? 'btn-outline-success' : 'btn-outline-warning'}" 
-                        onclick="event.stopPropagation(); window.uploadManager.toggleListVisibility('${list._id}', ${list.isVisibleToUsers !== false})"
-                        title="${list.isVisibleToUsers !== false ? 'Click to hide from agents' : 'Click to show to agents'}">
-                    <i class="bi ${list.isVisibleToUsers !== false ? 'bi-eye' : 'bi-eye-slash'}"></i>
+                <button class="btn btn-sm ${list.isVisibleToUsers ? 'btn-success' : 'btn-outline-secondary'}" 
+                        onclick="event.stopPropagation(); window.uploadManager.toggleListVisibility('${list._id}', ${list.isVisibleToUsers})"
+                        title="${list.isVisibleToUsers ? 'Click to hide from agents' : 'Click to show to agents'}">
+                    <i class="bi ${list.isVisibleToUsers ? 'bi-eye' : 'bi-eye-slash'} me-1"></i>
+                    ${list.isVisibleToUsers ? 'Visible' : 'Hidden'}
                 </button>
             ` : '';
             
@@ -66,28 +66,27 @@ class UploadManager {
                                 ) : ''
                             }
                         </div>
-                    </div>
-                    <div class="d-flex gap-1">
+                    </div>                    <div class="d-flex gap-1">
                         ${visibilityButton}
-                        <button class="btn btn-sm btn-outline-secondary" 
-                                onclick="event.stopPropagation(); window.uploadManager.editList('${list._id}')"
-                                title="Edit list">
-                            <i class="bi bi-pencil"></i>
-                        </button>
                     </div>
                 </div>
             </div>
         `}).join('');
 
         container.innerHTML = listsHtml;
-    }
-
-    // Select a lead list
+    }    // Select a lead list
     async selectList(listId) {
-        this.selectedListId = listId;
-        await this.loadLeadLists(); // Refresh to update selection styling
-        await this.loadSelectedListDetails(listId);
-    }    // Load details for selected list
+        try {
+            this.selectedListId = listId;
+            await this.loadLeadLists(); // Refresh to update selection styling
+            await this.loadSelectedListDetails(listId);
+        } catch (error) {
+            console.error('Error selecting list:', error);
+            // If there was an error, clear the selection
+            this.selectedListId = null;
+            this.selectedList = null;
+        }
+    }// Load details for selected list
     async loadSelectedListDetails(listId) {
         try {
             const list = await this.apiManager.get(`/lead-lists/${listId}`);
@@ -97,7 +96,25 @@ class UploadManager {
             this.renderSelectedList(list, leads);
         } catch (error) {
             console.error('Error loading list details:', error);
-            this.showError('Failed to load list details');
+            
+            // If list not found (404), clear selection and reload lists
+            if (error.message && error.message.includes('Not Found')) {
+                console.log('List not found, clearing selection and reloading lists');
+                this.selectedListId = null;
+                this.selectedList = null;
+                this.showError('Selected list no longer exists. Please select another list.');
+                
+                // Clear the selected list display
+                const container = document.getElementById('selected-list-container');
+                if (container) {
+                    container.innerHTML = '<p class="text-muted">No list selected</p>';
+                }
+                
+                // Reload the list to refresh the UI
+                await this.loadLeadLists();
+            } else {
+                this.showError('Failed to load list details');
+            }
         }
     }
 
@@ -123,11 +140,10 @@ class UploadManager {
               let visibilityInfo = '';
             if (isAdmin) {
                 if (list.isVisibleToUsers !== false) {
-                    visibilityInfo = `<p class="mb-1"><strong>Visibility:</strong> Visible to all agents</p>`;
-                } else {
+                    visibilityInfo = `<p class="mb-1"><strong>Visibility:</strong> Visible to all agents</p>`;                } else {
                     if (list.visibleToSpecificAgents && list.visibleToSpecificAgents.length > 0) {
                         const agentNames = list.visibleToSpecificAgents.map(agent => 
-                            typeof agent === 'string' ? agent : agent.name
+                            agent.name || agent
                         ).join(', ');
                         visibilityInfo = `<p class="mb-1"><strong>Visibility:</strong> <span class="text-info">Visible only to: ${agentNames}</span></p>`;
                     } else {
@@ -198,11 +214,15 @@ class UploadManager {
         leadsElement.innerHTML = tableHtml;
     }    // Render individual lead row
     renderLeadRow(lead) {
-        const customFieldsCells = this.selectedList && this.selectedList.labels ?
-            this.selectedList.labels.map(label => {
-                const value = lead.customFields?.[label.name] || '';
-                return `<td>${value}</td>`;
-            }).join('') : '';
+        let customFieldsCells = '';
+        
+        // Add list-specific label data
+        if (this.selectedList && this.selectedList.labels && this.selectedList.labels.length > 0) {
+            this.selectedList.labels.forEach(label => {
+                const value = lead.customFields?.[label.name] || '-';
+                customFieldsCells += `<td>${value}</td>`;
+            });
+        }
 
         return `
             <tr data-lead-id="${lead._id}">
@@ -218,12 +238,10 @@ class UploadManager {
             </tr>
         `;
     }// Initialize modals
-    initializeModals() {
-        // Create modals if they don't exist
+    initializeModals() {        // Create modals if they don't exist
         this.createCreateListModal();
         this.createBulkAddModal();
-        this.createEditListModal();
-    }    // Show create list modal
+    }// Show create list modal
     async showCreateListModal() {
         const modal = new bootstrap.Modal(document.getElementById('createListModal'));
 
@@ -259,6 +277,11 @@ class UploadManager {
             this.showSuccess('Lead list created successfully');
             await this.loadLeadLists();
 
+            // Also refresh Leads section if it exists, so agents see new lists immediately  
+            if (window.leadsManager && typeof window.leadsManager.refreshLeadsData === 'function') {
+                await window.leadsManager.refreshLeadsData();
+            }
+
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('createListModal'));
             modal.hide();
@@ -270,65 +293,7 @@ class UploadManager {
             console.error('Error creating list:', error);
             this.showError('Failed to create lead list');
         }
-    }
-
-    // Edit lead list
-    async editList(listId) {
-        try {
-            const list = await this.apiManager.get(`/lead-lists/${listId}`);
-            this.showEditListModal(list);
-        } catch (error) {
-            console.error('Error loading list for edit:', error);
-            this.showError('Failed to load list details');
-        }
-    }    // Update lead list
-    async updateList(listId, name, description, isVisibleToUsers = true, visibleToSpecificAgents = []) {
-        try {
-            await this.apiManager.put(`/lead-lists/${listId}`, {
-                name: name.trim(),
-                description: description.trim(),
-                isVisibleToUsers: isVisibleToUsers,
-                visibleToSpecificAgents: visibleToSpecificAgents
-            });
-
-            this.showSuccess('Lead list updated successfully');
-            await this.loadLeadLists();
-
-            if (this.selectedListId === listId) {
-                await this.loadSelectedListDetails(listId);
-            }
-
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('editListModal'));
-            modal.hide();
-
-        } catch (error) {
-            console.error('Error updating list:', error);
-            this.showError('Failed to update lead list');
-        }
-    }// Delete lead list
-    async deleteList(listId) {
-        if (!confirm('Are you sure you want to delete this list? This will also remove all leads in the list.')) {
-            return;
-        }
-
-        try {
-            await this.apiManager.delete(`/lead-lists/${listId}?hard=true`);
-            this.showSuccess('Lead list deleted successfully');
-
-            if (this.selectedListId === listId) {
-                this.selectedListId = null;
-                document.getElementById('selected-list-panel').style.display = 'none';
-                document.getElementById('no-list-selected').style.display = 'block';
-            }
-
-            await this.loadLeadLists();
-
-        } catch (error) {
-            console.error('Error deleting list:', error);
-            this.showError('Failed to delete lead list');
-        }
-    }    // Bulk add leads to selected list
+    }// Update lead list    // Delete lead list    // Bulk add leads to selected list
     async bulkAddLeads(leadsData) {
         if (!this.selectedListId) {
             this.showError('No list selected');
@@ -400,9 +365,7 @@ class UploadManager {
                     `;
                 }
             });
-        }
-
-        // Add Status field as hardcoded default field
+        }        // Add Status field as hardcoded default field
         formHtml += `
             <div class="col-md-6 mb-3">
                 <label class="form-label">Status *</label>
@@ -412,7 +375,10 @@ class UploadManager {
                     <option value="Voice Mail">Voice Mail</option>
                     <option value="Call Back Qualified">Call Back Qualified</option>
                     <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
-                    <option value="lead-released">Lead Released</option>
+                    <option value="deposited">Deposited</option>
+                    <option value="active">Active</option>
+                    <option value="withdrawn">Withdrawn</option>
+                    <option value="inactive">Inactive</option>
                 </select>
                 <small class="text-muted">This will apply to all leads</small>
             </div>
@@ -499,9 +465,7 @@ class UploadManager {
         }
 
         // Determine the maximum number of leads to create
-        const maxLeads = Math.max(...Object.values(customFieldArrays).map(arr => arr.length));
-
-        // Create leads array
+        const maxLeads = Math.max(...Object.values(customFieldArrays).map(arr => arr.length));        // Create leads array
         const leads = [];
         for (let i = 0; i < maxLeads; i++) {
             const lead = {
@@ -522,6 +486,13 @@ class UploadManager {
                 const array = customFieldArrays[fieldName];
                 customFields[fieldName] = array[i] || array[array.length - 1] || '';
             });
+
+            // Combine firstName and lastName into fullName for the lead object
+            const firstName = customFields.firstName || '';
+            const lastName = customFields.lastName || '';
+            if (firstName || lastName) {
+                lead.fullName = `${firstName} ${lastName}`.trim();
+            }
 
             lead.customFields = customFields;
             leads.push(lead);
@@ -635,80 +606,9 @@ class UploadManager {
             </div>
         `;
 
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-    }
+        document.body.insertAdjacentHTML('beforeend', modalHtml);    }
 
-    // Create Edit List Modal
-    createEditListModal() {
-        if (document.getElementById('editListModal')) return;
-
-        const modalHtml = `
-            <div class="modal fade" id="editListModal" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Edit Lead List</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <form id="editListForm" onsubmit="event.preventDefault(); window.uploadManager.handleEditList(event);">
-                            <div class="modal-body">
-                                <input type="hidden" name="listId" id="editListId">
-                                <div class="mb-3">
-                                    <label class="form-label">List Name *</label>
-                                    <input type="text" class="form-control" name="name" id="editListName" required>
-                                </div>                                <div class="mb-3">
-                                    <label class="form-label">Description</label>
-                                    <textarea class="form-control" name="description" id="editListDescription" rows="3"></textarea>
-                                </div>                                <div class="mb-3">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="isVisibleToUsers" id="edit-list-visible" checked>
-                                        <label class="form-check-label" for="edit-list-visible">
-                                            <strong>Visible to All Agents</strong>
-                                        </label>
-                                        <div class="form-text">When checked, all agents can see this list. When unchecked, you can choose specific agents.</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="mb-3" id="edit-specific-agents-section" style="display: none;">
-                                    <label class="form-label">Select Specific Agents</label>
-                                    <div id="edit-agents-selection" class="border rounded p-3">
-                                        <!-- Agent checkboxes will be loaded here -->
-                                    </div>
-                                    <div class="form-text">Choose which agents can see this list when not visible to all agents.</div>
-                                </div></div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-danger me-auto" onclick="window.uploadManager.confirmDeleteList()">
-                                    <i class="bi bi-trash me-1"></i>Delete List
-                                </button>
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="submit" class="btn btn-primary">Update List</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-    }    // Show edit list modal with data
-    async showEditListModal(list) {
-        document.getElementById('editListId').value = list._id;
-        document.getElementById('editListName').value = list.name;
-        document.getElementById('editListDescription').value = list.description || '';
-        
-        // Set the visibility checkbox
-        const visibilityCheckbox = document.getElementById('edit-list-visible');
-        if (visibilityCheckbox) {
-            visibilityCheckbox.checked = list.isVisibleToUsers !== false; // Default to true if undefined
-        }        // Setup agent selection with pre-selected agents
-        const selectedAgentIds = (list.visibleToSpecificAgents || []).map(agent => 
-            typeof agent === 'string' ? agent : agent._id
-        );
-        await this.setupEditAgentSelection(selectedAgentIds);
-
-        const modal = new bootstrap.Modal(document.getElementById('editListModal'));
-        modal.show();
-    }// Add custom label field to create form
+    // Add custom label field to create form
     addCustomLabel() {
         const container = document.getElementById('custom-labels-container');
         if (!container) return;
@@ -790,7 +690,8 @@ class UploadManager {
         container.innerHTML = '';
 
         const defaultLabels = [
-            { name: 'fullName', label: 'Full Name', type: 'text', required: true },
+            { name: 'firstName', label: 'First Name', type: 'text', required: true },
+            { name: 'lastName', label: 'Last Name', type: 'text', required: true },
             { name: 'email', label: 'Email', type: 'email', required: false },
             { name: 'phone', label: 'Phone', type: 'text' },
             { name: 'currency', label: 'Currency', type: 'text' },
@@ -812,12 +713,16 @@ class UploadManager {
                 lastRow.querySelector(`input[name="labels[${index}][required]"]`).checked = true;
             }
         });
-    }    // Handle create list form submission
+    }
+
+    // Handle create list form submission
     async handleCreateList(event) {
+        event.preventDefault();
+        
         const formData = new FormData(event.target);
         const name = formData.get('name');
         const description = formData.get('description');
-        const isVisibleToUsers = formData.get('isVisibleToUsers') === 'on';
+        const isVisibleToUsers = formData.get('isVisible') === 'on';
 
         // Collect selected agents if not visible to all
         let visibleToSpecificAgents = [];
@@ -828,8 +733,8 @@ class UploadManager {
 
         // Process custom labels
         const labels = [];
-        const container = document.getElementById('custom-labels-container');
-        const labelRows = container.querySelectorAll('.custom-label-row');
+        const container = document.getElementById('create-labels-container');
+        const labelRows = container?.querySelectorAll('.custom-label-row') || [];
 
         labelRows.forEach((row, index) => {
             const labelName = formData.get(`labels[${index}][name]`);
@@ -856,15 +761,98 @@ class UploadManager {
 
         await this.createList(name, description, labels, isVisibleToUsers, visibleToSpecificAgents);
         event.target.reset();
+        
         // Clear custom labels
         if (container) container.innerHTML = '';
-    }    // Handle edit list form submission
+    }
+
+    // Handle bulk add form submission
+    async handleBulkAdd(event) {
+        const formData = new FormData(event.target);
+        await this.processBulkAddForm(formData);        event.target.reset();
+    }
+
+    // Edit the currently selected list
+    editSelectedList() {
+        if (!this.selectedListId) {
+            this.showError('No list selected');
+            return;
+        }
+        this.editList(this.selectedListId);
+    }
+
+    // Delete the currently selected list
+    deleteSelectedList() {
+        if (!this.selectedListId) {
+            this.showError('No list selected');
+            return;
+        }
+        this.deleteList(this.selectedListId);    }
+
+    // Show edit list modal with current list data
+    async editList(listId) {
+        try {
+            const list = await this.apiManager.get(`/lead-lists/${listId}`);
+            
+            // Populate form fields
+            document.getElementById('editListId').value = list._id;
+            document.getElementById('editListName').value = list.name;
+            document.getElementById('editListDescription').value = list.description || '';
+            document.getElementById('edit-list-visible').checked = list.isVisibleToUsers;
+            
+            // Setup agent selection with current selections
+            await this.setupEditAgentSelection(list.visibleToSpecificAgents || []);
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('editListModal'));
+            modal.show();
+            
+        } catch (error) {
+            console.error('Error loading list for edit:', error);
+            this.showError('Failed to load list details');
+        }
+    }
+
+    // Load agents list for edit modal
+    async loadEditAgentsList(selectedAgents = []) {
+        try {
+            const users = await this.apiManager.get('/users');
+            const agents = users.filter(user => user.role === 'agent');
+            
+            const container = document.getElementById('editSpecificAgentsList');
+            container.innerHTML = agents.map(agent => `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" 
+                           id="editAgent_${agent._id}" 
+                           name="editSpecificAgents" 
+                           value="${agent._id}"
+                           ${selectedAgents.includes(agent._id) ? 'checked' : ''}>
+                    <label class="form-check-label" for="editAgent_${agent._id}">
+                        ${agent.name} (${agent.username})
+                    </label>
+                </div>
+            `).join('');
+            
+        } catch (error) {
+            console.error('Error loading agents:', error);
+        }
+    }
+
+    // Toggle specific agents section in edit modal
+    toggleEditSpecificAgents() {
+        const isVisibleToUsers = document.getElementById('editIsVisibleToUsers').checked;
+        const specificAgentsSection = document.getElementById('editSpecificAgentsSection');
+        specificAgentsSection.style.display = isVisibleToUsers ? 'none' : 'block';    }
+
+    // Handle edit list form submission
     async handleEditList(event) {
+        event.preventDefault();
+        
         const formData = new FormData(event.target);
         const listId = formData.get('listId');
         const name = formData.get('name');
         const description = formData.get('description');
-        const isVisibleToUsers = formData.get('isVisibleToUsers') === 'on';
+        const isVisibleToUsers = formData.get('isVisible') === 'on';
 
         // Collect selected agents if not visible to all
         let visibleToSpecificAgents = [];
@@ -876,18 +864,74 @@ class UploadManager {
         await this.updateList(listId, name, description, isVisibleToUsers, visibleToSpecificAgents);
     }
 
-    // Handle bulk add form submission
-    async handleBulkAdd(event) {
-        const formData = new FormData(event.target);
-        await this.processBulkAddForm(formData);
-        event.target.reset();
-    }    // Edit the currently selected list
-    editSelectedList() {
-        if (!this.selectedListId) {
-            this.showError('No list selected');
+    // Update lead list
+    async updateList(listId, name, description, isVisibleToUsers = true, visibleToSpecificAgents = []) {
+        try {
+            await this.apiManager.put(`/lead-lists/${listId}`, {
+                name: name.trim(),
+                description: description.trim(),
+                isVisibleToUsers: isVisibleToUsers,
+                visibleToSpecificAgents: visibleToSpecificAgents
+            });
+
+            this.showSuccess('Lead list updated successfully');
+            await this.loadLeadLists();
+
+            if (this.selectedListId === listId) {
+                await this.loadSelectedListDetails(listId);
+            }
+
+            // Also refresh Leads section if it exists, so agents see immediate changes
+            if (window.leadsManager && typeof window.leadsManager.refreshLeadsData === 'function') {
+                await window.leadsManager.refreshLeadsData();
+            }
+
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editListModal'));
+            modal.hide();
+
+        } catch (error) {
+            console.error('Error updating list:', error);
+            this.showError('Failed to update lead list');
+        }
+    }
+
+    // Delete lead list
+    async deleteList(listId) {
+        if (!confirm('Are you sure you want to delete this list? This will also remove all leads in the list.')) {
             return;
         }
-        this.editList(this.selectedListId);
+
+        try {
+            await this.apiManager.delete(`/lead-lists/${listId}?hard=true`);
+            this.showSuccess('Lead list deleted successfully');
+
+            if (this.selectedListId === listId) {
+                this.selectedListId = null;
+                document.getElementById('selected-list-panel').style.display = 'none';
+                document.getElementById('no-list-selected').style.display = 'block';
+            }
+
+            await this.loadLeadLists();
+
+        } catch (error) {
+            console.error('Error deleting list:', error);
+            this.showError('Failed to delete lead list');
+        }
+    }
+
+    // Confirm delete list from edit modal
+    confirmDeleteList() {
+        const listId = document.getElementById('editListId').value;
+        const listName = document.getElementById('editListName').value;
+        
+        if (confirm(`Are you sure you want to delete "${listName}"?\n\nThis will permanently delete the list and all associated leads. This action cannot be undone.`)) {
+            this.deleteList(listId);
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editListModal'));
+            modal.hide();
+        }
     }
 
     // Remove lead from list
@@ -910,9 +954,7 @@ class UploadManager {
             console.error('Error removing lead:', error);
             this.showError('Failed to remove lead');
         }
-    }
-
-    // Toggle list visibility for admins
+    }    // Toggle list visibility for admins
     async toggleListVisibility(listId, currentVisibility) {
         try {
             const response = await this.apiManager.put(`/lead-lists/${listId}`, {
@@ -924,6 +966,11 @@ class UploadManager {
 
             if (this.selectedListId === listId) {
                 await this.loadSelectedListDetails(listId);
+            }
+
+            // Also refresh Leads section if it exists, so agents see immediate changes
+            if (window.leadsManager && typeof window.leadsManager.refreshLeadsData === 'function') {
+                await window.leadsManager.refreshLeadsData();
             }
 
         } catch (error) {
@@ -973,9 +1020,7 @@ class UploadManager {
                 specificAgentsSection.style.display = 'block';
             }
         });
-    }
-
-    // Setup agent selection in edit modal
+    }    // Setup agent selection in edit modal
     async setupEditAgentSelection(selectedAgents = []) {
         const agents = await this.loadAgents();
         const agentsContainer = document.getElementById('edit-agents-selection');
@@ -984,11 +1029,16 @@ class UploadManager {
 
         if (!agentsContainer || !visibilityCheckbox || !specificAgentsSection) return;
 
+        // Extract agent IDs from the selectedAgents array (handles both ID strings and agent objects)
+        const selectedAgentIds = selectedAgents.map(agent => 
+            typeof agent === 'string' ? agent : agent._id
+        );
+
         // Render agent checkboxes
         agentsContainer.innerHTML = agents.map(agent => `
             <div class="form-check">
                 <input class="form-check-input" type="checkbox" name="editSpecificAgents" value="${agent._id}" id="edit-agent-${agent._id}" 
-                       ${selectedAgents.includes(agent._id) ? 'checked' : ''}>
+                       ${selectedAgentIds.includes(agent._id) ? 'checked' : ''}>
                 <label class="form-check-label" for="edit-agent-${agent._id}">
                     ${agent.name} (${agent.email})
                 </label>
@@ -1020,18 +1070,7 @@ class UploadManager {
 
     // Show error message
     showError(message) {
-        this.apiManager.showAlert(message, 'danger', 'list-error');
-    }
-
-    // Confirm delete list from edit modal
-    confirmDeleteList() {
-        const listId = document.getElementById('editListId').value;
-        const listName = document.getElementById('editListName').value;
-        
-        if (confirm(`Are you sure you want to delete "${listName}"?\n\nThis will permanently delete the list and all associated leads. This action cannot be undone.`)) {
-            this.deleteList(listId);
-        }
-    }
+        this.apiManager.showAlert(message, 'danger', 'list-error');    }
 }
 
 // Create global instance

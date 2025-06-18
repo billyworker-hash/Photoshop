@@ -9,8 +9,19 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="container-fluid">
-        <div class="row">            <!-- Sidebar -->
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="d-flex justify-content-center align-items-center position-fixed w-100 h-100" style="background-color: #f8f9fa; z-index: 9999;">
+        <div class="text-center">
+            <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <h5 class="text-muted">Loading CRM System...</h5>
+        </div>
+    </div>
+
+    <!-- Main App Content (hidden initially) -->
+    <div id="app-content" class="container-fluid d-none">
+        <div class="row"><!-- Sidebar -->
             <div class="col-md-2 bg-dark text-white sidebar min-vh-100 py-3">
                 <h4 class="text-center">CRM System</h4>
                 <hr>
@@ -132,20 +143,21 @@
                             <div class="row">
                                 <div class="col-md-3 mb-3 mb-md-0">
                                     <input type="text" class="form-control" id="lead-search" placeholder="Search by name, email...">
-                                </div>
-                                <div class="col-md-3 mb-3 mb-md-0">
+                                </div>                                <div class="col-md-3 mb-3 mb-md-0">
                                     <select class="form-select" id="lead-list-filter">
-                                        <option value="">All Lists</option>
+                                        <option value="">Select a List</option>
                                     </select>
                                 </div>
                                 <div class="col-md-3 mb-3 mb-md-0">                                    <select class="form-select" id="lead-status-filter">
                                         <option value="">All Statuses</option>
                                         <option value="new">New</option>
-                                        <option value="No Answer">No Answer</option>
-                                        <option value="Voice Mail">Voice Mail</option>
+                                        <option value="No Answer">No Answer</option>                                        <option value="Voice Mail">Voice Mail</option>
                                         <option value="Call Back Qualified">Call Back Qualified</option>
                                         <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
-                                        <option value="lead-released">Lead Released</option>
+                                        <option value="deposited">Deposited</option>
+                                        <option value="active">Active</option>
+                                        <option value="withdrawn">Withdrawn</option>
+                                        <option value="inactive">Inactive</option>
                                     </select>
                                 </div>                                <div class="col-md-3">
                                     <button class="btn btn-outline-secondary w-100" id="reset-filters-btn">
@@ -226,13 +238,15 @@
                             <div id="selected-list-panel" style="display: none;">
                                 <div class="card shadow">
                                     <div class="card-header d-flex justify-content-between align-items-center">
-                                        <h5 class="mb-0" id="selected-list-title">Selected List</h5>
-                                        <div>
+                                        <h5 class="mb-0" id="selected-list-title">Selected List</h5>                                        <div>
                                             <button class="btn btn-sm btn-outline-primary me-2" onclick="window.uploadManager.showBulkAddModal()">
                                                 <i class="bi bi-plus-lg me-1"></i> Add Leads
                                             </button>
-                                            <button class="btn btn-sm btn-outline-secondary" onclick="window.uploadManager.editSelectedList()">
+                                            <button class="btn btn-sm btn-outline-secondary me-2" onclick="window.uploadManager.editSelectedList()">
                                                 <i class="bi bi-pencil me-1"></i> Edit List
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" onclick="window.uploadManager.deleteSelectedList()">
+                                                <i class="bi bi-trash me-1"></i> Delete List
                                             </button>
                                         </div>
                                     </div>
@@ -333,9 +347,11 @@
                                         <option value="new">New</option>
                                         <option value="No Answer">No Answer</option>
                                         <option value="Voice Mail">Voice Mail</option>
-                                        <option value="Call Back Qualified">Call Back Qualified</option>
-                                        <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
-                                        <option value="lead-released">Lead Released</option>
+                                        <option value="Call Back Qualified">Call Back Qualified</option>                                        <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
+                                        <option value="deposited">Deposited</option>
+                                        <option value="active">Active</option>
+                                        <option value="withdrawn">Withdrawn</option>
+                                        <option value="inactive">Inactive</option>
                                     </select>
                                 </div>
                                 <div class="col-md-3">
@@ -376,9 +392,7 @@
                                         <option value="new">New</option>
                                         <option value="No Answer">No Answer</option>
                                         <option value="Voice Mail">Voice Mail</option>
-                                        <option value="Call Back Qualified">Call Back Qualified</option>
-                                        <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
-                                        <option value="lead-released">Lead Released</option>
+                                        <option value="Call Back Qualified">Call Back Qualified</option>                                        <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
                                         <option value="deposited">Deposited</option>
                                         <option value="active">Active</option>
                                         <option value="withdrawn">Withdrawn</option>
@@ -488,11 +502,13 @@
                         </div>                        <div class="mb-3">
                             <label for="edit-lead-status" class="form-label">Status</label>                            <select class="form-select" id="edit-lead-status">
                                 <option value="new">New</option>
-                                <option value="No Answer">No Answer</option>
-                                <option value="Voice Mail">Voice Mail</option>
+                                <option value="No Answer">No Answer</option>                                <option value="Voice Mail">Voice Mail</option>
                                 <option value="Call Back Qualified">Call Back Qualified</option>
                                 <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
-                                <option value="lead-released">Lead Released</option>
+                                <option value="deposited">Deposited</option>
+                                <option value="active">Active</option>
+                                <option value="withdrawn">Withdrawn</option>
+                                <option value="inactive">Inactive</option>
                             </select>
                         </div>
                         
@@ -542,9 +558,11 @@
                             <option value="new">New</option>
                             <option value="No Answer">No Answer</option>
                             <option value="Voice Mail">Voice Mail</option>
-                            <option value="Call Back Qualified">Call Back Qualified</option>
-                            <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
-                            <option value="lead-released">Lead Released</option>
+                            <option value="Call Back Qualified">Call Back Qualified</option>                            <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
+                            <option value="deposited">Deposited</option>
+                            <option value="active">Active</option>
+                            <option value="withdrawn">Withdrawn</option>
+                            <option value="inactive">Inactive</option>
                         </select>
                     </div>                    <div class="mb-3">
                         <label for="lead-note-content" class="form-label">Add Note (Optional)</label>
@@ -608,7 +626,47 @@
                 </div>
             </div>
         </div>
-    </div>    <!-- Add Field Modal -->
+    </div>    <!-- Edit User Modal (Admin only) -->
+    <div class="modal fade" id="editUserModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit User</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-user-form">
+                        <input type="hidden" id="edit-user-id">
+                        <div class="mb-3">
+                            <label for="edit-user-name" class="form-label">Name</label>
+                            <input type="text" class="form-control" id="edit-user-name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-user-email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="edit-user-email" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-user-password" class="form-label">New Password (optional)</label>
+                            <input type="password" class="form-control" id="edit-user-password">
+                            <div class="form-text">Leave blank to keep current password</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-user-role" class="form-label">Role</label>
+                            <select class="form-select" id="edit-user-role">
+                                <option value="agent">Agent</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="update-user-btn">Update User</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Add Field Modal -->
     <div class="modal fade" id="addFieldModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -719,14 +777,118 @@
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" id="update-field-btn">Update Field</button>
                 </div>
+            </div>        </div>    </div>
+
+    <!-- Create List Modal -->
+    <div class="modal fade" id="createListModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New List</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="createListForm" onsubmit="window.uploadManager.handleCreateList(event); return false;">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="createListName" class="form-label">List Name *</label>
+                            <input type="text" class="form-control" id="createListName" name="name" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="createListDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="createListDescription" name="description" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="create-list-visible" name="isVisible" checked>
+                                <label class="form-check-label" for="create-list-visible">
+                                    Visible to all agents
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div id="specific-agents-section" class="mb-3" style="display: none;">
+                            <label class="form-label">Select Specific Agents</label>
+                            <div id="agents-selection" class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                                <!-- Agent checkboxes will be populated here -->
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Default Labels</label>
+                            <div id="create-labels-container" class="row">
+                                <!-- Default labels will be added here -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-plus-circle me-1"></i> Create List
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
-    </div>    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>    <script src="js/ApiManager.js"></script>
+    </div>    <!-- Edit List Modal -->
+    <div class="modal fade" id="editListModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit List</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="editListForm" onsubmit="window.uploadManager.handleEditList(event); return false;">
+                    <div class="modal-body">
+                        <input type="hidden" id="editListId" name="listId">
+                        
+                        <div class="mb-3">
+                            <label for="editListName" class="form-label">List Name *</label>
+                            <input type="text" class="form-control" id="editListName" name="name" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="editListDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="editListDescription" name="description" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="edit-list-visible" name="isVisible" checked>
+                                <label class="form-check-label" for="edit-list-visible">
+                                    Visible to all agents
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div id="edit-specific-agents-section" class="mb-3" style="display: none;">
+                            <label class="form-label">Select Specific Agents</label>
+                            <div id="edit-agents-selection" class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                                <!-- Agent checkboxes will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-danger me-auto" onclick="window.uploadManager.confirmDeleteList()">
+                            <i class="bi bi-trash me-1"></i> Delete List
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-1"></i> Update List
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script><script src="js/ApiManager.js"></script>
     <script src="js/Dashboard.js"></script>
     <script src="js/Leads.js"></script>    <script src="js/Upload.js"></script>
     <script src="js/Fields.js"></script>
     <script src="js/Customers.js"></script>
     <script src="js/Depositors.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/app.js"></script>    </script>
 </body>
 </html>

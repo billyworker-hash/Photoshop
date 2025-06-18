@@ -173,7 +173,22 @@ body {
     font-weight: bold;
 }
 
-.status-lead-released {
+.status-deposited {
+    color: #20c997;
+    font-weight: bold;
+}
+
+.status-active {
+    color: #0dcaf0;
+    font-weight: bold;
+}
+
+.status-withdrawn {
+    color: #f8d7da;
+    font-weight: bold;
+}
+
+.status-inactive {
     color: #6f42c1;
     font-weight: bold;
 }
@@ -292,6 +307,25 @@ body {
 
 .status-call-back-not-qualified {
     background-color: #dc3545 !important;
+}
+
+.status-deposited {
+    background-color: #20c997 !important;
+    color: #000 !important;
+}
+
+.status-active {
+    background-color: #0dcaf0 !important;
+    color: #000 !important;
+}
+
+.status-withdrawn {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+}
+
+.status-inactive {
+    background-color: #6f42c1 !important;
 }
 
 /* Modal improvements */
@@ -608,7 +642,56 @@ body {
     color: #dc3545;
 }
 
-.lead-status-dropdown option[value="lead-released"] {
+.lead-status-dropdown option[value="deposited"] {
+    color: #20c997;
+}
+
+.lead-status-dropdown option[value="active"] {
+    color: #0dcaf0;
+}
+
+.lead-status-dropdown option[value="withdrawn"] {
+    color: #f8d7da;
+}
+
+.lead-status-dropdown option[value="inactive"] {
+    color: #6f42c1;
+}
+
+/* Status colors for lead dropdowns - text color only */
+.lead-status-dropdown.status-new {
+    color: #6c757d;
+}
+
+.lead-status-dropdown.status-no-answer {
+    color: #fd7e14;
+}
+
+.lead-status-dropdown.status-voice-mail {
+    color: #0d6efd;
+}
+
+.lead-status-dropdown.status-call-back-qualified {
+    color: #198754;
+}
+
+.lead-status-dropdown.status-call-back-not-qualified {
+    color: #dc3545;
+}
+
+.lead-status-dropdown.status-deposited {
+    color: #20c997;
+}
+
+.lead-status-dropdown.status-active {
+    color: #0dcaf0;
+}
+
+.lead-status-dropdown.status-withdrawn {
+    color: #f8d7da;
+}
+
+.lead-status-dropdown.status-inactive {
     color: #6f42c1;
 }
 
@@ -723,7 +806,19 @@ body {
     color: #dc3545;
 }
 
-.customer-status-dropdown option[value="lead-released"] {
+.customer-status-dropdown option[value="deposited"] {
+    color: #20c997;
+}
+
+.customer-status-dropdown option[value="active"] {
+    color: #0dcaf0;
+}
+
+.customer-status-dropdown option[value="withdrawn"] {
+    color: #f8d7da;
+}
+
+.customer-status-dropdown option[value="inactive"] {
     color: #6f42c1;
 }
 
@@ -748,7 +843,19 @@ body {
     color: #dc3545;
 }
 
-.customer-status-dropdown.status-lead-released {
+.customer-status-dropdown.status-deposited {
+    color: #20c997;
+}
+
+.customer-status-dropdown.status-active {
+    color: #0dcaf0;
+}
+
+.customer-status-dropdown.status-withdrawn {
+    color: #f8d7da;
+}
+
+.customer-status-dropdown.status-inactive {
     color: #6f42c1;
 }
 
@@ -859,7 +966,19 @@ body {
     color: #dc3545;
 }
 
-.depositor-status-dropdown option[value="lead-released"] {
+.depositor-status-dropdown option[value="deposited"] {
+    color: #20c997;
+}
+
+.depositor-status-dropdown option[value="active"] {
+    color: #0dcaf0;
+}
+
+.depositor-status-dropdown option[value="withdrawn"] {
+    color: #f8d7da;
+}
+
+.depositor-status-dropdown option[value="inactive"] {
     color: #6f42c1;
 }
 
@@ -884,7 +1003,19 @@ body {
     color: #dc3545;
 }
 
-.depositor-status-dropdown.status-lead-released {
+.depositor-status-dropdown.status-deposited {
+    color: #20c997;
+}
+
+.depositor-status-dropdown.status-active {
+    color: #0dcaf0;
+}
+
+.depositor-status-dropdown.status-withdrawn {
+    color: #f8d7da;
+}
+
+.depositor-status-dropdown.status-inactive {
     color: #6f42c1;
 }
 
@@ -927,15 +1058,8 @@ body {
 .phone-link:hover {
     color: #0b5ed7;
     background-color: rgba(13, 110, 253, 0.15);
-    text-decoration: none;
-    transform: translateY(-1px);
+    text-decoration: none;    transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.phone-link::before {
-    content: "📞";
-    margin-right: 6px;
-    font-size: 18px;
 }
 
 /* Enhanced Pagination Styles for Better Accessibility */

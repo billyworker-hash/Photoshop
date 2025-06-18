@@ -18,7 +18,7 @@ class LeadsManager {    constructor(apiManager) {
         this.leadsPerPage = 10; // Default to 10 leads per page
         this.totalPages = 1;
         this.filteredLeads = [];
-    }// Load leads
+    }    // Load leads
     async loadLeads() {
         try {
             // Load custom fields first
@@ -28,11 +28,18 @@ class LeadsManager {    constructor(apiManager) {
             await this.loadLeadLists();
               this.allLeads = await this.fetchLeads();
             
-            // Display lead list cards
+            // Display lead list cards (this will auto-select first list)
             this.displayLeadListCards();
             
-            // Display leads with proper headers
-            this.displayLeads(this.allLeads);
+            // Only display leads if a list is selected, otherwise show selection message
+            if (this.selectedListId) {
+                // Filter leads by selected list
+                const filteredLeads = this.allLeads.filter(lead => lead.leadList === this.selectedListId);
+                this.displayLeads(filteredLeads);
+            } else {
+                // Show selection message
+                this.displayLeads([]);
+            }
             
             // Initialize custom fields in forms
             this.initializeCustomFields();
@@ -55,7 +62,7 @@ class LeadsManager {    constructor(apiManager) {
         } catch (err) {
             console.error('Error loading leads:', err);
         }
-    }    // Refresh leads data only (without reinitializing UI components)
+    }// Refresh leads data only (without reinitializing UI components)
     async refreshLeadsData() {
         try {
             // Fetch fresh lead lists data to pick up visibility changes
@@ -66,16 +73,18 @@ class LeadsManager {    constructor(apiManager) {
             
             // Update the leads array
             this.allLeads = newLeads;
-            
-            // Update lead list cards to reflect any visibility changes
-            this.displayLeadListCards();
-            
-            // Check if currently selected list is still visible to current user
+              // Update lead list cards to reflect any visibility changes (prevent auto-selection during refresh)
+            this.displayLeadListCards(true);
+              // Check if currently selected list is still visible to current user
             if (this.selectedListId) {
                 const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);
                 if (!selectedList) {
-                    // Selected list is no longer visible, reset to "All Lists"
-                    this.selectLeadList(null);
+                    // Selected list is no longer visible, select first available list
+                    if (this.allLeadLists.length > 0) {
+                        this.selectLeadList(this.allLeadLists[0]._id);
+                    } else {
+                        this.selectedListId = null;
+                    }
                     return; // selectLeadList will handle the display update
                 }
             }
@@ -123,7 +132,7 @@ class LeadsManager {    constructor(apiManager) {
             this.allLeadLists = [];
         }
     }    // Display lead list cards
-    displayLeadListCards() {
+    displayLeadListCards(preventAutoSelect = false) {
         const cardsContainer = document.getElementById('lead-lists-cards');
         if (!cardsContainer) return;
 
@@ -132,15 +141,19 @@ class LeadsManager {    constructor(apiManager) {
 
         cardsContainer.innerHTML = '';
 
-        // Add "All Lists" card
-        const allListsCard = this.createLeadListCard({
-            _id: null,
-            name: 'All Lists',
-            description: 'View all leads from all lists',
-            leadCount: this.allLeads.length
-        }, this.selectedListId === null);
+        // If no lists are available, show a message
+        if (this.allLeadLists.length === 0) {
+            cardsContainer.innerHTML = `
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-list-ul fs-1"></i>
+                    <p class="mt-2">No lead lists available</p>
+                    <small>Contact your administrator to create lead lists</small>
+                </div>
+            `;
+            return;
+        }
 
-        cardsContainer.appendChild(allListsCard);        // Add individual list cards
+        // Add individual list cards only
         this.allLeadLists.forEach(list => {
             const leadCount = this.allLeads.filter(lead => lead.leadList === list._id).length;
             const card = this.createLeadListCard({
@@ -149,7 +162,12 @@ class LeadsManager {    constructor(apiManager) {
             }, this.selectedListId === list._id);
             cardsContainer.appendChild(card);
         });
-    }    // Create individual lead list card
+
+        // Auto-select first list if none is selected (but not during refresh)
+        if (!preventAutoSelect && !this.selectedListId && this.allLeadLists.length > 0) {
+            this.selectLeadList(this.allLeadLists[0]._id);
+        }
+    }// Create individual lead list card
     createLeadListCard(list, isSelected = false) {
         const card = document.createElement('div');
         card.className = `lead-list-card ${isSelected ? 'selected' : ''}`;
@@ -157,21 +175,10 @@ class LeadsManager {    constructor(apiManager) {
         
         const currentUser = this.apiManager.getCurrentUser();
         const isAdmin = currentUser && currentUser.role === 'admin';
-        
-        card.innerHTML = `
+          card.innerHTML = `
             <div class="card-header">
                 <h5 class="card-title">${list.name}</h5>
                 <span class="lead-count-badge">${list.leadCount} leads</span>
-                ${list._id && isAdmin ? `
-                    <div class="card-actions">
-                        <button class="btn btn-sm btn-outline-primary edit-list-btn" title="Edit List">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-danger delete-list-btn" title="Delete List">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
-                ` : ''}
             </div>
             <div class="card-body">
                 <p class="card-description">${list.description || 'No description'}</p>
@@ -191,44 +198,7 @@ class LeadsManager {    constructor(apiManager) {
         this.eventListeners.push({
             element: card,
             event: 'click',
-            handler: cardClickHandler
-        });
-
-        // Add event listeners for admin actions
-        if (list._id && isAdmin) {
-            const editBtn = card.querySelector('.edit-list-btn');
-            const deleteBtn = card.querySelector('.delete-list-btn');
-            
-            if (editBtn) {
-                const editHandler = (e) => {
-                    e.stopPropagation();
-                    this.openEditListModal(list);
-                };
-                editBtn.addEventListener('click', editHandler);
-                
-                // Track this event listener for cleanup
-                this.eventListeners.push({
-                    element: editBtn,
-                    event: 'click',
-                    handler: editHandler
-                });
-            }
-            
-            if (deleteBtn) {
-                const deleteHandler = (e) => {
-                    e.stopPropagation();
-                    this.confirmDeleteList(list);
-                };
-                deleteBtn.addEventListener('click', deleteHandler);
-                
-                // Track this event listener for cleanup
-                this.eventListeners.push({
-                    element: deleteBtn,
-                    event: 'click',
-                    handler: deleteHandler
-                });
-            }
-        }
+            handler: cardClickHandler        });
 
         return card;
     }// Select lead list for filtering
@@ -292,6 +262,23 @@ class LeadsManager {    constructor(apiManager) {
         
         // Clean up existing row event listeners
         this.cleanupRowEventListeners();
+        
+        // If no list is selected, show message requiring list selection
+        if (!this.selectedListId) {
+            tableHeader.innerHTML = '';
+            tableBody.innerHTML = '';
+            if (noLeadsMessage) {
+                noLeadsMessage.style.display = 'block';
+                noLeadsMessage.innerHTML = `
+                    <div class="alert alert-info text-center">
+                        <i class="bi bi-list-ul fs-1"></i>
+                        <p class="mt-2 mb-0">Please select a lead list to view leads</p>
+                    </div>
+                `;
+            }
+            this.updatePaginationControls();
+            return;
+        }
         
         // Generate dynamic table headers
         this.generateTableHeaders(tableHeader);
@@ -711,16 +698,17 @@ class LeadsManager {    constructor(apiManager) {
                 } else {
                     rowHtml += `<td>${value}</td>`;
                 }
-            });}
-        
-        // Add status dropdown instead of badge
+            });}          // Add status dropdown instead of badge
         const statusOptions = [
             'new',
             'No Answer', 
             'Voice Mail',
             'Call Back Qualified',
             'Call Back NOT Qualified',
-            'lead-released'
+            'deposited',
+            'active',
+            'withdrawn',
+            'inactive'
         ];
         
         let statusHtml = `
@@ -825,13 +813,15 @@ class LeadsManager {    constructor(apiManager) {
                 handler: listFilterHandler
             });
         }
-        
-        if (resetFiltersBtn) {
+          if (resetFiltersBtn) {
             const resetHandler = () => {
                 if (searchInput) searchInput.value = '';
                 if (statusFilter) statusFilter.value = '';
                 if (listFilter) listFilter.value = '';
-                this.selectLeadList(null);
+                // Select first available list instead of null
+                if (this.allLeadLists.length > 0) {
+                    this.selectLeadList(this.allLeadLists[0]._id);
+                }
             };
             resetFiltersBtn.addEventListener('click', resetHandler);
             this.eventListeners.push({
@@ -839,22 +829,33 @@ class LeadsManager {    constructor(apiManager) {
                 event: 'click',
                 handler: resetHandler
             });
-        }
-    }
+        }    }
 
     // Populate list filter dropdown
     populateListFilterDropdown() {
         const listFilter = document.getElementById('lead-list-filter');
         if (!listFilter) return;
 
-        listFilter.innerHTML = '<option value="">All Lists</option>';
+        // Store the current selection before rebuilding
+        const currentSelection = listFilter.value;
+
+        listFilter.innerHTML = '<option value="">Select a List</option>';
         
         this.allLeadLists.forEach(list => {
             const option = document.createElement('option');
             option.value = list._id;
             option.textContent = list.name;
             listFilter.appendChild(option);
-        });    }
+        });
+
+        // Restore the previous selection if it still exists
+        if (currentSelection && this.allLeadLists.find(list => list._id === currentSelection)) {
+            listFilter.value = currentSelection;
+        } else if (this.selectedListId && this.allLeadLists.find(list => list._id === this.selectedListId)) {
+            // If no previous selection but there's a selectedListId, use that
+            listFilter.value = this.selectedListId;
+        }
+    }
 
     // Load agents for dropdown
     async loadAgentsForDropdown() {
@@ -1514,244 +1515,9 @@ class LeadsManager {    constructor(apiManager) {
             return status.charAt(0).toUpperCase() + status.slice(1);
         }
         // For legacy hyphenated statuses, convert hyphens to spaces and capitalize
-        return status.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-    }
+        return status.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');    }
 
-    // Open edit list modal
-    openEditListModal(list) {
-        // Create and show edit modal
-        const modalHtml = `
-            <div class="modal fade" id="editListModal" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Edit Lead List</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <form id="edit-list-form">
-                                <div class="mb-3">
-                                    <label for="edit-list-name" class="form-label">List Name</label>
-                                    <input type="text" class="form-control" id="edit-list-name" value="${list.name}" required>
-                                </div>                                <div class="mb-3">
-                                    <label for="edit-list-description" class="form-label">Description</label>
-                                    <textarea class="form-control" id="edit-list-description" rows="3">${list.description || ''}</textarea>
-                                </div>
-                                <div class="mb-3">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="edit-list-visible" ${list.isVisibleToUsers !== false ? 'checked' : ''}>
-                                        <label class="form-check-label" for="edit-list-visible">
-                                            <strong>Visible to Agents</strong>
-                                        </label>
-                                        <div class="form-text">When unchecked, only admins can see this list. Agents will not see it in their lead list selection.</div>
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Custom Labels</label>
-                                    <div id="edit-labels-container"></div>
-                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="window.leadsManager.addEditLabelField()">
-                                        <i class="bi bi-plus"></i> Add Label
-                                    </button>
-                                </div>
-                            </form>                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-danger me-auto" onclick="window.leadsManager.confirmDeleteList('${list._id}', '${list.name}')">
-                                <i class="bi bi-trash me-1"></i>Delete List
-                            </button>
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="button" class="btn btn-primary" onclick="window.leadsManager.handleEditList('${list._id}')">Save Changes</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // Remove existing modal if present
-        const existingModal = document.getElementById('editListModal');
-        if (existingModal) {
-            existingModal.remove();
-        }
-
-        // Add modal to body
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-        // Populate existing labels
-        this.populateEditLabels(list.labels || []);
-
-        // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('editListModal'));
-        modal.show();
-    }
-
-    // Populate edit labels
-    populateEditLabels(labels) {
-        const container = document.getElementById('edit-labels-container');
-        if (!container) return;
-
-        container.innerHTML = '';
-        
-        labels.forEach((label, index) => {
-            this.addEditLabelField(label, index);
-        });
-    }
-
-    // Add edit label field
-    addEditLabelField(existingLabel = null, index = null) {
-        const container = document.getElementById('edit-labels-container');
-        if (!container) return;
-
-        const labelIndex = index !== null ? index : container.children.length;
-        const labelDiv = document.createElement('div');
-        labelDiv.className = 'label-field mb-2';
-        labelDiv.innerHTML = `
-            <div class="row g-2 align-items-center">
-                <div class="col-5">
-                    <input type="text" class="form-control form-control-sm" 
-                           placeholder="Field name (e.g., company)" 
-                           value="${existingLabel?.name || ''}"
-                           name="edit-label-name-${labelIndex}">
-                </div>
-                <div class="col-5">
-                    <input type="text" class="form-control form-control-sm" 
-                           placeholder="Display label (e.g., Company)" 
-                           value="${existingLabel?.label || ''}"
-                           name="edit-label-display-${labelIndex}">
-                </div>
-                <div class="col-2">
-                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.parentElement.parentElement.remove()">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `;
-        container.appendChild(labelDiv);
-    }    // Handle edit list
-    async handleEditList(listId) {
-        const form = document.getElementById('edit-list-form');
-        if (!form) return;
-
-        const name = document.getElementById('edit-list-name')?.value?.trim();
-        const description = document.getElementById('edit-list-description')?.value?.trim();
-        const isVisibleToUsers = document.getElementById('edit-list-visible')?.checked || false;
-
-        if (!name) {
-            alert('Please enter a list name');
-            return;
-        }
-
-        // Collect labels
-        const labels = [];
-        const labelFields = document.querySelectorAll('#edit-labels-container .label-field');
-        
-        labelFields.forEach((field, index) => {
-            const nameInput = field.querySelector(`[name="edit-label-name-${index}"]`);
-            const displayInput = field.querySelector(`[name="edit-label-display-${index}"]`);
-            
-            if (nameInput && displayInput && nameInput.value.trim() && displayInput.value.trim()) {
-                labels.push({
-                    name: nameInput.value.trim(),
-                    label: displayInput.value.trim(),
-                    type: 'text'
-                });
-            }
-        });
-
-        const listData = {
-            name,
-            description,
-            labels,
-            isVisibleToUsers
-        };
-
-        try {
-            const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/lead-lists/${listId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(listData)
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to update lead list');
-            }
-
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('editListModal'));
-            if (modal) modal.hide();            // Reload data
-            await this.loadLeadLists();
-            this.displayLeadListCards();
-            
-            // Refresh table if the edited list is currently selected
-            if (this.selectedListId === listId) {
-                this.filterLeadsByList();
-            }
-
-            alert('Lead list updated successfully!');
-        } catch (err) {
-            console.error('Error updating lead list:', err);
-            alert('Failed to update lead list: ' + err.message);
-        }
-    }    // Confirm delete list
-    confirmDeleteList(listId, listName) {
-        const message = `Are you sure you want to delete "${listName}"?\n\nThis will permanently delete the list and all associated leads. This action cannot be undone.`;
-
-        if (confirm(message)) {
-            this.deleteList(listId);
-        }
-    }
-
-    // Delete list
-    async deleteList(listId) {
-        try {
-            // Always use hard delete to ensure complete cleanup
-            const url = `${this.apiManager.API_URL}/lead-lists/${listId}?hard=true`;
-
-            const response = await this.apiManager.authenticatedFetch(url, {
-                method: 'DELETE'
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to delete lead list');
-            }
-
-            // Reload data
-            await this.loadLeadLists();
-            await this.loadLeads();
-            
-            // Reset selection if deleted list was selected
-            if (this.selectedListId === listId) {
-                this.selectLeadList(null);
-            }
-
-            alert('Lead list deleted successfully!');
-        } catch (err) {
-            console.error('Error deleting lead list:', err);
-            alert('Failed to delete lead list: ' + err.message);
-        }
-    }    // Refresh lead list card counts
-    refreshLeadListCards() {
-        const cardsContainer = document.getElementById('lead-lists-cards');
-        if (!cardsContainer) return;
-
-        // Update lead counts for existing cards
-        const cards = cardsContainer.querySelectorAll('.lead-list-card');
-        cards.forEach(card => {
-            const listId = card.dataset.listId;
-            const leadCountBadge = card.querySelector('.lead-count-badge');
-            
-            if (leadCountBadge) {
-                if (listId === '') {
-                    // "All Lists" card
-                    leadCountBadge.textContent = `${this.allLeads.length} leads`;
-                } else {
-                    // Individual list card
-                    const leadCount = this.allLeads.filter(lead => lead.leadList === listId).length;
-                    leadCountBadge.textContent = `${leadCount} leads`;
-                }
-            }
-        });
-    }    // Update lead status from dropdown
+    // Refresh lead list card counts    // Update lead status from dropdown
     async updateLeadStatus(leadId, newStatus) {
         try {
             const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/leads/${leadId}`, {
@@ -1845,15 +1611,13 @@ class LeadsManager {    constructor(apiManager) {
         toastElement.addEventListener('hidden.bs.toast', () => {
             toastElement.remove();
         });
-    }
-
-    // Apply color styling to dropdowns based on selected status
+    }    // Apply color styling to dropdowns based on selected status
     applyStatusColors() {
         document.querySelectorAll('.lead-status-dropdown').forEach(dropdown => {
             const status = dropdown.value;
               // Remove existing status color classes
             dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail', 
-                                     'status-call-back-qualified', 'status-call-back-not-qualified', 'status-lead-released');
+                                     'status-call-back-qualified', 'status-call-back-not-qualified');
             
             // Add class based on current status
             switch(status) {
@@ -1868,23 +1632,18 @@ class LeadsManager {    constructor(apiManager) {
                     break;
                 case 'Call Back Qualified':
                     dropdown.classList.add('status-call-back-qualified');
-                    break;                case 'Call Back NOT Qualified':
-                    dropdown.classList.add('status-call-back-not-qualified');
                     break;
-                case 'lead-released':
-                    dropdown.classList.add('status-lead-released');
+                case 'Call Back NOT Qualified':
+                    dropdown.classList.add('status-call-back-not-qualified');
                     break;
             }
         });
     }
 
     // Clean up card event listeners
-    cleanupCardEventListeners() {
-        // Remove event listeners that are specific to cards
+    cleanupCardEventListeners() {        // Remove event listeners that are specific to cards
         this.eventListeners = this.eventListeners.filter(listener => {
-            const isCardListener = listener.element.classList?.contains('lead-list-card') ||
-                                 listener.element.classList?.contains('edit-list-btn') ||
-                                 listener.element.classList?.contains('delete-list-btn');
+            const isCardListener = listener.element.classList?.contains('lead-list-card');
             
             if (isCardListener) {
                 listener.element.removeEventListener(listener.event, listener.handler);
@@ -1951,26 +1710,20 @@ class LeadsManager {    constructor(apiManager) {
         
         // Always enable auto-refresh when this method is called
         this.autoRefreshEnabled = true;
-        
-        this.autoRefreshInterval = setInterval(async () => {
+          this.autoRefreshInterval = setInterval(async () => {
             // Only refresh if the leads page is active
             if (this.isLeadsPageActive) {
                 await this.refreshLeadsData();
             }
         }, this.refreshIntervalMs);
-        
-        console.log('Auto-refresh started for leads (5 second interval)');
-    }
-
-    // Stop auto-refresh
+    }    // Stop auto-refresh
     stopAutoRefresh() {
         if (this.autoRefreshInterval) {
             clearInterval(this.autoRefreshInterval);
             this.autoRefreshInterval = null;
             this.autoRefreshEnabled = false;
-            console.log('Auto-refresh stopped for leads');
         }
-    }    // Set leads page active state
+    }// Set leads page active state
     setPageActive(isActive) {
         this.isLeadsPageActive = isActive;
         
@@ -1994,27 +1747,12 @@ class LeadsManager {    constructor(apiManager) {
         if (!phoneNumber) return '';
         // Remove all non-numeric characters except +
         return phoneNumber.replace(/[^\d+]/g, '');
-    }
-
-    // Format phone number for display with privacy (show only last 2 digits)
+    }    // Format phone number for display with just a phone icon to save space
     formatPhoneForDisplay(phoneNumber) {
         if (!phoneNumber) return '';
         
-        // Clean the phone number to get digits only
-        const cleanPhone = phoneNumber.replace(/[^\d]/g, '');
-        
-        if (cleanPhone.length < 2) {
-            return phoneNumber; // Return original if too short
-        }
-        
-        // Get last 2 digits
-        const lastTwoDigits = cleanPhone.slice(-2);
-        
-        // Create masked version with x's and last 2 digits
-        const maskedLength = cleanPhone.length - 2;
-        const masked = 'x'.repeat(maskedLength) + lastTwoDigits;
-        
-        return masked;
+        // Return a different phone icon to save maximum space
+        return '☎️';
     }
 }
 

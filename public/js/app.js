@@ -2,18 +2,64 @@
 // This file coordinates all modules and handles core application functionality
 
 document.addEventListener('DOMContentLoaded', async function() {
-    // Initialize all managers
-    await initializeManagers();
+    // Wait for apiManager to be available
+    await waitForApiManager();
+      // Check authentication FIRST before doing anything else
+    if (!window.apiManager.token || !window.apiManager.isTokenValid()) {
+        // Hide loading screen before redirecting
+        const loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) {
+            loadingScreen.classList.remove('d-flex');
+            loadingScreen.classList.add('d-none');
+        }
+        window.apiManager.clearToken();
+        window.location.href = '/login';
+        return;
+    }
     
-    // Check authentication and show app
-    checkAuthAndShowApp();
-    
-    // Set up event listeners
-    setupEventListeners();
-    
-    // Set up navigation
-    setupNavigation();
+    // Only proceed if authenticated
+    try {
+        // Initialize all managers
+        await initializeManagers();
+        
+        // Show the app
+        await showApp();
+        
+        // Set up event listeners
+        setupEventListeners();
+        
+        // Set up navigation
+        setupNavigation();
+    } catch (error) {
+        console.error('Error initializing app:', error);        // Hide loading screen even on error
+        const loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) {
+            loadingScreen.classList.remove('d-flex');
+            loadingScreen.classList.add('d-none');
+        }
+        window.location.href = '/login';
+    }
 });
+
+// Wait for apiManager to be available
+function waitForApiManager() {
+    return new Promise((resolve) => {
+        if (window.apiManager) {
+            resolve();
+            return;
+        }
+        
+        const checkApiManager = () => {
+            if (window.apiManager) {
+                resolve();
+            } else {
+                setTimeout(checkApiManager, 10);
+            }
+        };
+        
+        checkApiManager();
+    });
+}
 
 // Initialize all module managers
 async function initializeManagers() {
@@ -41,22 +87,6 @@ async function initializeManagers() {
     await window.uploadManager.init();
 }
 
-// Check authentication and show app if valid
-async function checkAuthAndShowApp() {
-    if (window.apiManager.token) {
-        if (window.apiManager.isTokenValid()) {
-            await showApp();
-        } else {
-            console.log('Token expired, redirecting to login');
-            window.apiManager.clearToken();
-            window.location.href = '/login';
-        }
-    } else {
-        // Redirect to login page
-        window.location.href = '/login';
-    }
-}
-
 // Set up all event listeners
 function setupEventListeners() {
     // Logout button
@@ -66,9 +96,9 @@ function setupEventListeners() {
     document.getElementById('save-lead-btn')?.addEventListener('click', () => window.leadsManager.handleAddLead());
     document.getElementById('update-lead-btn')?.addEventListener('click', () => window.leadsManager.handleUpdateLead());
     // NOTE: save-lead-note-btn listener removed - handled by modal-specific setup in Leads.js
-    
-    // User management button
+      // User management buttons
     document.getElementById('save-user-btn')?.addEventListener('click', handleAddUser);
+    document.getElementById('update-user-btn')?.addEventListener('click', handleUpdateUser);
 }
 
 // Set up navigation between pages
@@ -102,6 +132,16 @@ async function showApp() {
         // Validate token with server
         const response = await window.apiManager.authenticatedFetch(`${window.apiManager.API_URL}/dashboard/stats`);        if (!response.ok) {
             throw new Error('Invalid token');
+        }        // Hide loading screen and show the app
+        const loadingScreen = document.getElementById('loading-screen');
+        const appContent = document.getElementById('app-content');
+          if (loadingScreen) {
+            loadingScreen.classList.remove('d-flex');
+            loadingScreen.classList.add('d-none');
+        }
+        
+        if (appContent) {
+            appContent.classList.remove('d-none');
         }
         
         // Update UI with user information
@@ -114,12 +154,17 @@ async function showApp() {
         }
         if (window.depositorManager) {
             window.depositorManager.init();
-        }
-
-        // Show dashboard by default
-        showPage('dashboard');
+        }        // Show dashboard by default
+        setTimeout(() => {
+            showPage('dashboard');
+            // Ensure dashboard is definitely visible
+            const dashboardPage = document.getElementById('dashboard-page');
+            if (dashboardPage) {
+                dashboardPage.style.display = 'block';
+                console.log('Dashboard page forced to display');
+            }
+        }, 100);
     } catch (error) {
-        console.log('Token validation failed, redirecting to login');
         window.apiManager.clearToken();
         window.location.href = '/login';
     }
@@ -155,13 +200,19 @@ function showPage(pageName) {
     // Hide all pages
     document.querySelectorAll('.page-content').forEach(page => {
         page.style.display = 'none';
-    });
-    
-    // Show selected page
+    });    // Show selected page
     const targetPage = document.getElementById(`${pageName}-page`);
     if (targetPage) {
         targetPage.style.display = 'block';
-    }    // Load data for the page
+    } else {
+        console.error(`Page not found: ${pageName}-page`);
+    }// Update navigation active state
+    document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
+    const activeNavLink = document.querySelector(`.sidebar .nav-link[data-page="${pageName}"]`);
+    if (activeNavLink) {
+        activeNavLink.classList.add('active');
+        console.log(`Navigation updated for: ${pageName}`);
+    }// Load data for the page
     const currentUser = window.apiManager.getCurrentUser();
     switch(pageName) {
         case 'dashboard':
@@ -243,21 +294,43 @@ function displayUsers(users) {
                 <span class="badge bg-${user.status === 'active' ? 'success' : 'danger'}">
                     ${user.status.charAt(0).toUpperCase() + user.status.slice(1)}
                 </span>
+            </td>            <td>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-sm btn-outline-primary edit-user-btn" 
+                            data-id="${user._id}" data-name="${user.name}" data-email="${user.email}" data-role="${user.role}">
+                        <i class="bi bi-pencil"></i> Edit
+                    </button>
+                    <button class="btn btn-sm btn-outline-${user.status === 'active' ? 'danger' : 'success'} toggle-status-btn" 
+                            data-id="${user._id}" data-status="${user.status}">
+                        ${user.status === 'active' ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger delete-user-btn" 
+                            data-id="${user._id}" data-name="${user.name}">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                </div>
             </td>
-            <td>
-                <button class="btn btn-sm btn-outline-${user.status === 'active' ? 'danger' : 'success'} toggle-status-btn" 
-                        data-id="${user._id}" data-status="${user.status}">
-                    ${user.status === 'active' ? 'Deactivate' : 'Activate'}
-                </button>
-            </td>
-        `;
-        tableBody.appendChild(row);
+        `;        tableBody.appendChild(row);
         
-        // Add event listener to toggle status button
+        // Add event listeners to action buttons
         row.querySelector('.toggle-status-btn').addEventListener('click', (e) => {
             const userId = e.target.getAttribute('data-id');
             const currentStatus = e.target.getAttribute('data-status');
             toggleUserStatus(userId, currentStatus === 'active' ? 'inactive' : 'active');
+        });
+        
+        row.querySelector('.edit-user-btn').addEventListener('click', (e) => {
+            const userId = e.target.getAttribute('data-id');
+            const userName = e.target.getAttribute('data-name');
+            const userEmail = e.target.getAttribute('data-email');
+            const userRole = e.target.getAttribute('data-role');
+            openEditUserModal(userId, userName, userEmail, userRole);
+        });
+        
+        row.querySelector('.delete-user-btn').addEventListener('click', (e) => {
+            const userId = e.target.getAttribute('data-id');
+            const userName = e.target.getAttribute('data-name');
+            deleteUser(userId, userName);
         });
     });
 }
@@ -327,6 +400,91 @@ async function handleAddUser() {
     } catch (err) {
         console.error('Error adding user:', err);
         alert('Failed to add user: ' + err.message);
+    }
+}
+
+// Open edit user modal
+function openEditUserModal(userId, userName, userEmail, userRole) {
+    document.getElementById('edit-user-id').value = userId;
+    document.getElementById('edit-user-name').value = userName;
+    document.getElementById('edit-user-email').value = userEmail;
+    document.getElementById('edit-user-role').value = userRole;
+    document.getElementById('edit-user-password').value = ''; // Clear password field
+    
+    const editUserModal = new bootstrap.Modal(document.getElementById('editUserModal'));
+    editUserModal.show();
+}
+
+// Handle updating a user (admin only)
+async function handleUpdateUser() {
+    try {
+        const userId = document.getElementById('edit-user-id').value;
+        const name = document.getElementById('edit-user-name').value.trim();
+        const email = document.getElementById('edit-user-email').value.trim();
+        const password = document.getElementById('edit-user-password').value.trim();
+        const role = document.getElementById('edit-user-role').value;
+
+        if (!name || !email) {
+            alert('Please fill in all required fields');
+            return;
+        }
+
+        const updateData = { name, email, role };
+        
+        // Only include password if it was provided
+        if (password) {
+            updateData.password = password;
+        }
+
+        const response = await window.apiManager.authenticatedFetch(`${window.apiManager.API_URL}/users/${userId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updateData)
+        });
+
+        if (response.ok) {
+            // Close modal
+            const editUserModal = bootstrap.Modal.getInstance(document.getElementById('editUserModal'));
+            editUserModal.hide();
+            
+            // Reload users list
+            loadUsers();
+            
+            alert('User updated successfully');
+        } else {
+            const errorData = await response.json();
+            alert(errorData.message || 'Failed to update user');
+        }
+    } catch (err) {
+        console.error('Error updating user:', err);
+        alert('Error updating user. Please try again.');
+    }
+}
+
+// Delete user with confirmation
+async function deleteUser(userId, userName) {
+    if (!confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const response = await window.apiManager.authenticatedFetch(`${window.apiManager.API_URL}/users/${userId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            // Reload users list
+            loadUsers();
+            alert('User deleted successfully');
+        } else {
+            const errorData = await response.json();
+            alert(errorData.message || 'Failed to delete user');
+        }
+    } catch (err) {
+        console.error('Error deleting user:', err);
+        alert('Error deleting user. Please try again.');
     }
 }
 

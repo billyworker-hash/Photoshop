@@ -1,9 +1,7 @@
 // Customers.js - Handle customer list functionality (mirrors Leads.js structure)
-class CustomerManager {
-    constructor(apiManager) {
+class CustomerManager {    constructor(apiManager) {
         this.apiManager = apiManager;
         this.allCustomers = [];
-        this.currentCustomer = null;
     }
 
     // Load customers - main entry point (mirrors loadLeads)
@@ -210,7 +208,7 @@ class CustomerManager {
         rowHtml += `<td><span class="badge bg-secondary">${customer.originalListName || 'Unknown List'}</span></td>`;
         
         // Add status dropdown
-        const statusOptions = ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'lead-released'];
+        const statusOptions = ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'];
         const currentStatus = customer.status || 'new';
         rowHtml += `
             <td>
@@ -361,11 +359,7 @@ class CustomerManager {
             // Add new event listener
             newMoveBtn.addEventListener('click', () => {
                 this.moveToDepositors(customer._id);
-            });
-        }
-        
-        // Set up the customer data for reference
-        this.currentCustomer = customer;
+            });        }
     }
 
     // Display customer notes (mirrors displayLeadNotes)
@@ -630,15 +624,13 @@ class CustomerManager {
         toastElement.addEventListener('hidden.bs.toast', () => {
             toastElement.remove();
         });
-    }
-
-    // Apply color styling to dropdowns based on selected status
+    }    // Apply color styling to dropdowns based on selected status
     applyStatusColors() {
         document.querySelectorAll('.customer-status-dropdown').forEach(dropdown => {
             const status = dropdown.value;
               // Remove existing status color classes
             dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail', 
-                                     'status-call-back-qualified', 'status-call-back-not-qualified', 'status-lead-released');
+                                     'status-call-back-qualified', 'status-call-back-not-qualified');
             
             // Add class based on current status
             switch(status) {
@@ -653,15 +645,13 @@ class CustomerManager {
                     break;
                 case 'Call Back Qualified':
                     dropdown.classList.add('status-call-back-qualified');
-                    break;                case 'Call Back NOT Qualified':
-                    dropdown.classList.add('status-call-back-not-qualified');
                     break;
-                case 'lead-released':
-                    dropdown.classList.add('status-lead-released');
+                case 'Call Back NOT Qualified':
+                    dropdown.classList.add('status-call-back-not-qualified');
                     break;
             }
         });
-    }    // Helper function to safely get field values
+    }// Helper function to safely get field values
     getField(obj, fieldName) {
         if (!obj) return '';
         
@@ -691,27 +681,12 @@ class CustomerManager {
         if (!phoneNumber) return '';
         // Remove all non-numeric characters except +
         return phoneNumber.replace(/[^\d+]/g, '');
-    }
-
-    // Format phone number for display with privacy (show only last 2 digits)
+    }    // Format phone number for display with just a phone icon to save space
     formatPhoneForDisplay(phoneNumber) {
         if (!phoneNumber) return '';
         
-        // Clean the phone number to get digits only
-        const cleanPhone = phoneNumber.replace(/[^\d]/g, '');
-        
-        if (cleanPhone.length < 2) {
-            return phoneNumber; // Return original if too short
-        }
-        
-        // Get last 2 digits
-        const lastTwoDigits = cleanPhone.slice(-2);
-        
-        // Create masked version with x's and last 2 digits
-        const maskedLength = cleanPhone.length - 2;
-        const masked = 'x'.repeat(maskedLength) + lastTwoDigits;
-        
-        return masked;
+        // Return a different phone icon to save maximum space
+        return '☎️';
     }
 }
 

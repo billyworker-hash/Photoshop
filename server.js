@@ -22,31 +22,32 @@ mongoose.connect(process.env.MONGODB_URI)
         process.exit(1); // Exit with error if MongoDB connection fails
     });
 
-// Helper function to ensure "Released Leads" list exists
-async function ensureReleasedLeadsList() {
+
+
+// Helper function to ensure "Users with no list" list exists
+async function ensureUsersWithNoListExists() {
     try {
-        let releasedList = await LeadList.findOne({ name: 'Released Leads' });
-        
-        if (!releasedList) {
-            releasedList = new LeadList({
-                name: 'Released Leads',
-                description: 'Default list for leads released from customer records',
+        let usersWithNoList = await LeadList.findOne({ name: 'Users with no list' });
+          if (!usersWithNoList) {            usersWithNoList = new LeadList({
+                name: 'Users with no list',
+                description: 'Default list for users whose original lead list has been deleted',
                 labels: [
                     { name: 'fullName', label: 'Full Name', type: 'text' },
                     { name: 'email', label: 'Email', type: 'email' },
                     { name: 'phone', label: 'Phone', type: 'text' },
                     { name: 'company', label: 'Company', type: 'text' }
                 ],
-                isSystem: true // Mark as system list
+                isSystem: true, // Mark as system list
+                isVisible: true // Ensure system lists are visible by default
             });
             
-            await releasedList.save();
-            console.log('Created "Released Leads" system list');
+            await usersWithNoList.save();
+            console.log('Created "Users with no list" system list');
         }
         
-        return releasedList;
+        return usersWithNoList;
     } catch (error) {
-        console.error('Error ensuring Released Leads list:', error);
+        console.error('Error ensuring Users with no list:', error);
         return null;
     }
 }
@@ -162,8 +163,7 @@ app.get('/api/leads', authenticate, async (req, res) => {
             let leadListFilter = { 
                 isActive: true, 
                 isCustomerList: { $ne: true } 
-            };
-              // For non-admin users, only include lists that are visible to users
+            };            // For non-admin users, only include lists that are visible
             if (req.user.role !== 'admin') {
                 leadListFilter.$or = [
                     { isVisibleToUsers: true },
@@ -488,11 +488,8 @@ app.post('/api/leads/:id/release', authenticate, async (req, res) => {
             customer.notes.push({
                 content: `Original lead was released back to general pool`,
                 createdAt: new Date(),
-                createdBy: req.user.id
-            });
+                createdBy: req.user.id            });
 
-            // Optionally mark customer as "lead-released" status
-            customer.status = 'lead-released';
             await customer.save();
         }
 
@@ -735,6 +732,65 @@ app.patch('/api/users/:id', authenticate, async (req, res) => {
     }
 });
 
+// Full user update endpoint (PUT)
+app.put('/api/users/:id', authenticate, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Admin access required' });
+        }
+        
+        const { name, email, password, role } = req.body;
+        
+        if (!name || !email) {
+            return res.status(400).json({ message: 'Name and email are required' });
+        }
+        
+        const updateData = { name, email, role };
+        
+        // If password is provided, hash it and include in update
+        if (password) {
+            const bcrypt = require('bcryptjs');
+            updateData.passwordHash = await bcrypt.hash(password, 10);
+        }
+        
+        const user = await User.findByIdAndUpdate(req.params.id, updateData, { new: true }).select('-passwordHash');
+        
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        
+        res.json(user);
+    } catch (error) {
+        console.error('User update error:', error);
+        res.status(500).json({ message: 'Failed to update user' });
+    }
+});
+
+// Delete user endpoint
+app.delete('/api/users/:id', authenticate, async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Admin access required' });
+        }
+        
+        // Prevent deletion of own account
+        if (req.params.id === req.user.id) {
+            return res.status(400).json({ message: 'Cannot delete your own account' });
+        }
+        
+        const user = await User.findByIdAndDelete(req.params.id);
+        
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        
+        res.json({ message: 'User deleted successfully' });
+    } catch (error) {
+        console.error('User deletion error:', error);
+        res.status(500).json({ message: 'Failed to delete user' });
+    }
+});
+
 // Lead Field Management Routes (Admin only)
 app.get('/api/lead-fields', authenticate, async (req, res) => {
     try {
@@ -830,15 +886,16 @@ app.get('/api/lead-lists', authenticate, async (req, res) => {
         if (req.query.isCustomerList !== undefined) {
             filter.isCustomerList = req.query.isCustomerList === 'true';
         }
-          // For non-admin users, only show lists that are visible to users
+
+        // For non-admin users, filter based on visibility settings
         if (req.user.role !== 'admin') {
-            // Check if user can see the list based on visibility settings
             filter.$or = [
                 { isVisibleToUsers: true },
                 { visibleToSpecificAgents: req.user.id }
             ];
         }
-          const lists = await LeadList.find(filter)
+
+        const lists = await LeadList.find(filter)
             .populate('createdBy', 'name email')
             .populate('visibleToSpecificAgents', 'name email')
             .sort({ createdAt: -1 });
@@ -863,7 +920,8 @@ app.post('/api/lead-lists', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-          const { name, description, labels, isVisibleToUsers, visibleToSpecificAgents } = req.body;
+
+        const { name, description, labels, isVisibleToUsers, visibleToSpecificAgents } = req.body;
         
         if (!name) {
             return res.status(400).json({ message: 'List name is required' });
@@ -910,12 +968,12 @@ app.put('/api/lead-lists/:id', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-        
-        const leadList = await LeadList.findByIdAndUpdate(
+          const leadList = await LeadList.findByIdAndUpdate(
             req.params.id, 
             req.body, 
             { new: true }
-        ).populate('createdBy', 'name email');
+        ).populate('createdBy', 'name email')
+        .populate('visibleToSpecificAgents', 'name email');
         
         if (!leadList) {
             return res.status(404).json({ message: 'Lead list not found' });
@@ -1136,12 +1194,11 @@ app.post('/api/customers/:id/release', authenticate, async (req, res) => {
             if (originalLeadList && originalLeadList.isActive) {
                 targetLeadList = originalLeadList;
                 targetListName = originalLeadList.name;
-            }
-        }        // If no original list or it's inactive, use the "Released Leads" list
+            }        }        // If no original list or it's inactive, use the "Users with no list" list
         if (!targetLeadList) {
-            const defaultList = await ensureReleasedLeadsList();
+            const defaultList = await ensureUsersWithNoListExists();
             if (!defaultList) {
-                return res.status(500).json({ message: 'Failed to create Released Leads list' });
+                return res.status(500).json({ message: 'Failed to create Users with no list' });
             }
             
             targetLeadList = defaultList;
@@ -1440,7 +1497,7 @@ app.patch('/api/depositors/:id/status', authenticate, async (req, res) => {
         if (!status) {
             return res.status(400).json({ message: 'Status is required' });
         }
-          const validStatuses = ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'lead-released', 'deposited', 'active', 'withdrawn', 'inactive'];
+          const validStatuses = ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ message: 'Invalid status' });
         }
@@ -1610,14 +1667,13 @@ app.post('/api/depositors/:id/release', authenticate, async (req, res) => {
             if (originalLeadList && originalLeadList.isActive) {
                 targetLeadList = originalLeadList;
                 targetListName = originalLeadList.name;
-            }
-        }
+            }        }
 
-        // If no original list or it's inactive, use the "Released Leads" list
+        // If no original list or it's inactive, use the "Users with no list" list
         if (!targetLeadList) {
-            const defaultList = await ensureReleasedLeadsList();
+            const defaultList = await ensureUsersWithNoListExists();
             if (!defaultList) {
-                return res.status(500).json({ message: 'Failed to create Released Leads list' });
+                return res.status(500).json({ message: 'Failed to create Users with no list' });
             }
             
             targetLeadList = defaultList;
@@ -1786,4 +1842,14 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
+
+// Initialize system lists on startup
+mongoose.connection.once('open', async () => {
+    console.log('MongoDB connected successfully');
+      // Ensure system lists exist
+    await ensureUsersWithNoListExists();
+    
+    console.log('System initialization complete');
+});
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
