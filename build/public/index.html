@@ -814,9 +814,13 @@
                                 <!-- Agent checkboxes will be populated here -->
                             </div>
                         </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Default Labels</label>
+                          <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label">Default Labels</label>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="window.uploadManager.addCustomLabelToCreateModal(document.getElementById('create-labels-container').children.length)">
+                                    <i class="bi bi-plus-circle me-1"></i> Add Custom Label
+                                </button>
+                            </div>
                             <div id="create-labels-container" class="row">
                                 <!-- Default labels will be added here -->
                             </div>

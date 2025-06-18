@@ -681,9 +681,86 @@ class UploadManager {
                 optionsInput.required = false;
             }
         });
-    }    // Add default labels to create form
+    }
+
+    // Add custom label specifically for create list modal
+    addCustomLabelToCreateModal(labelIndex) {
+        const container = document.getElementById('create-labels-container');
+        if (!container) return;
+
+        const labelHtml = `
+            <div class="custom-label-row mb-3 p-3 border rounded">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label class="form-label">Field Name</label>
+                        <input type="text" class="form-control" name="labels[${labelIndex}][name]" 
+                               placeholder="e.g., companySize" required>
+                        <small class="text-muted">Internal field name (no spaces)</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Display Label</label>
+                        <input type="text" class="form-control" name="labels[${labelIndex}][label]" 
+                               placeholder="e.g., Company Size" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Field Type</label>
+                        <select class="form-select" name="labels[${labelIndex}][type]">
+                            <option value="text">Text</option>
+                            <option value="number">Number</option>
+                            <option value="email">Email</option>
+                            <option value="phone">Phone</option>
+                            <option value="select">Select</option>
+                            <option value="textarea">Textarea</option>
+                        </select>
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="button" class="btn btn-sm btn-outline-danger d-block" 
+                                onclick="this.closest('.custom-label-row').remove()">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="labels[${labelIndex}][required]" value="true">
+                            <label class="form-check-label">Required field</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <input type="text" class="form-control" name="labels[${labelIndex}][options]" 
+                               placeholder="Options (comma separated)" style="display: none;">
+                        <small class="text-muted" style="display: none;">For select fields only</small>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.insertAdjacentHTML('beforeend', labelHtml);
+
+        // Add event listener for type change
+        const typeSelect = container.lastElementChild.querySelector('select[name*="[type]"]');
+        const optionsInput = container.lastElementChild.querySelector('input[name*="[options]"]');
+        const optionsHelp = container.lastElementChild.querySelector('small');
+
+        typeSelect.addEventListener('change', function () {
+            if (this.value === 'select') {
+                optionsInput.style.display = 'block';
+                optionsHelp.style.display = 'block';
+                optionsInput.required = true;
+            } else {
+                optionsInput.style.display = 'none';
+                optionsHelp.style.display = 'none';
+                optionsInput.required = false;
+            }
+        });
+    }
+
+    // Add default labels to create form
     addDefaultLabels() {
-        const container = document.getElementById('custom-labels-container');
+        // For create list modal, use the correct container ID
+        const container = document.getElementById('create-labels-container');
         if (!container) return;
 
         // Clear any existing labels
@@ -701,8 +778,7 @@ class UploadManager {
         ];
 
         defaultLabels.forEach((defaultLabel, index) => {
-            this.addCustomLabel();
-            const container = document.getElementById('custom-labels-container');
+            this.addCustomLabelToCreateModal(index);
             const lastRow = container.lastElementChild;
 
             lastRow.querySelector(`input[name="labels[${index}][name]"]`).value = defaultLabel.name;
