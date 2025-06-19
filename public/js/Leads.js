@@ -1,23 +1,23 @@
 // Leads.js - Handles lead management functionality
 class LeadsManager {    constructor(apiManager) {
         this.apiManager = apiManager;
-        this.allLeads = [];
         this.allLeadLists = [];
         this.selectedListId = null;
         this.eventListeners = []; // Track event listeners for cleanup
         this.filterListenersSetup = false; // Track if filter listeners are already set up
-        
-        // Auto-refresh properties
+          // Auto-refresh properties
         this.autoRefreshInterval = null;
         this.autoRefreshEnabled = false;
         this.refreshIntervalMs = 5000; // 5 seconds
         this.isLeadsPageActive = false;
-        
-        // Pagination properties
+        this.useOptimizedRefresh = true; // Use optimized refresh by default
+          // Pagination properties - now for server-side pagination
         this.currentPage = 1;
-        this.leadsPerPage = 10; // Default to 10 leads per page
+        this.leadsPerPage = 10; // Default batch size
         this.totalPages = 1;
-        this.filteredLeads = [];
+        this.totalCount = 0;
+        this.currentLeads = []; // Current page leads from server
+        this.currentFilters = {}; // Track current search/status filters
     }    // Load leads
     async loadLeads() {
         try {
@@ -26,20 +26,13 @@ class LeadsManager {    constructor(apiManager) {
             
             // Load lead lists for cards display
             await this.loadLeadLists();
-              this.allLeads = await this.fetchLeads();
             
-            // Display lead list cards (this will auto-select first list)
+            // Update lead list counts
+            await this.updateLeadListCounts();
+            
+            // Display lead list cards (this will auto-select first list if available)
+            // The auto-selection will trigger fetchLeads() and displayLeads() automatically
             this.displayLeadListCards();
-            
-            // Only display leads if a list is selected, otherwise show selection message
-            if (this.selectedListId) {
-                // Filter leads by selected list
-                const filteredLeads = this.allLeads.filter(lead => lead.leadList === this.selectedListId);
-                this.displayLeads(filteredLeads);
-            } else {
-                // Show selection message
-                this.displayLeads([]);
-            }
             
             // Initialize custom fields in forms
             this.initializeCustomFields();
@@ -62,17 +55,58 @@ class LeadsManager {    constructor(apiManager) {
         } catch (err) {
             console.error('Error loading leads:', err);
         }
-    }// Refresh leads data only (without reinitializing UI components)
+    }    // Update lead counts for each list (efficient single API call)
+    async updateLeadListCounts() {
+        try {
+            const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/leads/counts`);            if (response.ok) {
+                const counts = await response.json();
+                
+                console.log(`[FRONTEND DEBUG] Received counts:`, counts);
+                console.log(`[FRONTEND DEBUG] Current allLeadLists:`, this.allLeadLists.map(l => ({ id: l._id, name: l.name })));
+                
+                // Update each list with its count
+                counts.forEach(countInfo => {
+                    console.log(`[FRONTEND DEBUG] Processing count for listId: ${countInfo.listId}, count: ${countInfo.count}`);
+                    const list = this.allLeadLists.find(l => l._id === countInfo.listId);
+                    if (list) {
+                        console.log(`[FRONTEND DEBUG] Found matching list: ${list.name}, updating count to ${countInfo.count}`);
+                        list.leadCount = countInfo.count;
+                    } else {
+                        console.log(`[FRONTEND DEBUG] No matching list found for listId: ${countInfo.listId}`);
+                    }
+                });
+                
+                console.log(`[FRONTEND] Updated counts for ${counts.length} lead lists in single request`);
+            } else {
+                console.error('Failed to fetch lead counts');
+                // Fallback: set all counts to 0
+                this.allLeadLists.forEach(list => {
+                    list.leadCount = 0;
+                });
+            }
+        } catch (err) {
+            console.error('Error fetching lead counts:', err);
+            // Fallback: set all counts to 0
+            this.allLeadLists.forEach(list => {
+                list.leadCount = 0;
+            });
+        }
+    }
+
+    // Refresh leads data only (without reinitializing UI components)
     async refreshLeadsData() {
         try {
             // Fetch fresh lead lists data to pick up visibility changes
             await this.loadLeadLists();
             
-            // Fetch fresh leads data
-            const newLeads = await this.fetchLeads();
-            
-            // Update the leads array
-            this.allLeads = newLeads;
+            // Fetch fresh leads data for current page and filters
+            const result = await this.fetchLeads(this.currentPage, this.leadsPerPage, this.currentFilters);
+            this.currentLeads = result.leads;
+            this.totalPages = result.pagination.totalPages;
+            this.totalCount = result.pagination.totalCount;
+
+            // Update lead list counts
+            await this.updateLeadListCounts();
               // Update lead list cards to reflect any visibility changes (prevent auto-selection during refresh)
             this.displayLeadListCards(true);
               // Check if currently selected list is still visible to current user
@@ -89,25 +123,7 @@ class LeadsManager {    constructor(apiManager) {
                 }
             }
             
-            // Re-display leads with current filters
-            let filteredLeads = [...this.allLeads];
-            
-            // Apply current list filter
-            if (this.selectedListId) {
-                filteredLeads = filteredLeads.filter(lead => lead.leadList === this.selectedListId);
-            }
-            
-            // Apply current search and status filters
-            const searchInput = document.getElementById('lead-search');
-            const statusFilter = document.getElementById('lead-status-filter');
-            
-            const filters = {
-                search: searchInput?.value || '',
-                status: statusFilter?.value || ''
-            };
-            
-            // Update display with current filters
-            this.displayLeads(filteredLeads, filters);
+            // Re-display leads with current page            this.displayLeads(this.currentLeads);
             
             // Update the list filter dropdown to reflect any changes
             this.populateListFilterDropdown();
@@ -151,11 +167,10 @@ class LeadsManager {    constructor(apiManager) {
                 </div>
             `;
             return;
-        }
-
-        // Add individual list cards only
+        }        // Add individual list cards only
         this.allLeadLists.forEach(list => {
-            const leadCount = this.allLeads.filter(lead => lead.leadList === list._id).length;
+            // Use the leadCount from the API if available, otherwise default to 0
+            const leadCount = list.leadCount || 0;
             const card = this.createLeadListCard({
                 ...list,
                 leadCount
@@ -201,8 +216,8 @@ class LeadsManager {    constructor(apiManager) {
             handler: cardClickHandler        });
 
         return card;
-    }// Select lead list for filtering
-    selectLeadList(listId) {
+    }    // Select lead list for filtering
+    async selectLeadList(listId) {
         this.selectedListId = listId;
         
         // Update card selection visual state
@@ -215,8 +230,17 @@ class LeadsManager {    constructor(apiManager) {
             selectedCard.classList.add('selected');
         }
 
-        // Filter leads by selected list and refresh table headers
-        this.filterLeadsByList();
+        // Reset to first page when changing list
+        this.currentPage = 1;
+        
+        // Update current filters to include the new list
+        this.currentFilters = {
+            ...this.currentFilters,
+            listId: listId
+        };
+
+        // Fetch leads for the selected list
+        await this.refreshCurrentView();
         
         // Update the list filter dropdown to match
         const listFilter = document.getElementById('lead-list-filter');
@@ -236,29 +260,83 @@ class LeadsManager {    constructor(apiManager) {
             console.error('Error loading custom fields:', err);
             this.customFields = [];
         }
-    }
-
-    // Fetch leads
-    async fetchLeads() {
+    }    // Fetch leads with pagination
+    async fetchLeads(page = 1, limit = 100, filters = {}) {
         try {
-            const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/leads`);
+            // Build query parameters
+            const params = new URLSearchParams({
+                page: page.toString(),
+                limit: limit.toString()
+            });
+
+            // Add list filter if selected (use listId from filters or selectedListId)
+            const listId = filters.listId || this.selectedListId;
+            if (listId) {
+                params.append('leadList', listId);
+            }
+
+            // Add search filter
+            if (filters.search && filters.search.trim()) {
+                params.append('search', filters.search.trim());
+            }
+
+            // Add status filter
+            if (filters.status && filters.status !== '') {
+                params.append('status', filters.status);
+            }
+
+            const response = await this.apiManager.authenticatedFetch(
+                `${this.apiManager.API_URL}/leads?${params.toString()}`
+            );
             
             if (!response.ok) {
                 throw new Error('Failed to fetch leads');
             }
             
-            return await response.json();
+            const data = await response.json();
+            
+            // Handle both old format (array) and new format (object with pagination)
+            if (Array.isArray(data)) {
+                // Legacy format - return as-is for backward compatibility
+                return {
+                    leads: data,
+                    pagination: {
+                        currentPage: 1,
+                        totalPages: 1,
+                        totalCount: data.length,
+                        limit: data.length,
+                        hasNext: false,
+                        hasPrev: false
+                    }
+                };
+            } else {
+                // New format with pagination
+                return data;
+            }
         } catch (err) {
             console.error('Error fetching leads:', err);
-            return [];
+            return {
+                leads: [],
+                pagination: {
+                    currentPage: 1,
+                    totalPages: 1,
+                    totalCount: 0,
+                    limit: limit,                    hasNext: false,
+                    hasPrev: false
+                }
+            };
         }
-    }    // Display leads with filtering and pagination
-    displayLeads(leads, filters = {}) {
+    }
+
+    // Display leads (now works with server-side pagination)
+    displayLeads(leads) {
         const tableHeader = document.getElementById('leads-table-header');
         const tableBody = document.getElementById('leads-table-body');
         const noLeadsMessage = document.getElementById('no-leads-message');
         
-        if (!tableBody) return;
+        if (!tableBody) {
+            return;
+        }
         
         // Clean up existing row event listeners
         this.cleanupRowEventListeners();
@@ -285,54 +363,8 @@ class LeadsManager {    constructor(apiManager) {
         
         tableBody.innerHTML = '';
         
-        // Apply filters if provided
-        let filteredLeads = [...leads];
-          if (filters.search) {
-            const searchTerm = filters.search.toLowerCase();
-            filteredLeads = filteredLeads.filter(lead => {
-                // Search in standard fields
-                const standardMatch = lead.fullName?.toLowerCase().includes(searchTerm) || 
-                                    lead.email?.toLowerCase().includes(searchTerm) || 
-                                    lead.phone?.toLowerCase().includes(searchTerm);
-                
-                // Search in list-specific custom fields
-                let customMatch = false;
-                if (this.selectedListId) {
-                    const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);
-                    if (selectedList && selectedList.labels) {
-                        customMatch = selectedList.labels.some(label => {
-                            const value = lead.customFields?.[label.name];
-                            return value && value.toString().toLowerCase().includes(searchTerm);
-                        });
-                    }
-                } else {
-                    // Search in all possible custom fields when no list is selected
-                    if (lead.customFields) {
-                        customMatch = Object.values(lead.customFields).some(value => 
-                            value && value.toString().toLowerCase().includes(searchTerm)
-                        );
-                    }
-                }
-                
-                return standardMatch || customMatch;
-            });
-        }
-        
-        if (filters.status && filters.status !== '') {
-            filteredLeads = filteredLeads.filter(lead => lead.status === filters.status);
-        }
-        
-        // Store filtered leads for pagination
-        this.filteredLeads = filteredLeads;
-        
-        // Calculate pagination
-        this.totalPages = Math.ceil(filteredLeads.length / this.leadsPerPage);
-        if (this.currentPage > this.totalPages) {
-            this.currentPage = Math.max(1, this.totalPages);
-        }
-        
         // Show/hide no leads message
-        if (filteredLeads.length === 0) {
+        if (leads.length === 0) {
             tableBody.innerHTML = '';
             if (noLeadsMessage) noLeadsMessage.style.display = 'block';
             this.updatePaginationControls();
@@ -341,13 +373,8 @@ class LeadsManager {    constructor(apiManager) {
             if (noLeadsMessage) noLeadsMessage.style.display = 'none';
         }
         
-        // Calculate start and end indices for current page
-        const startIndex = (this.currentPage - 1) * this.leadsPerPage;
-        const endIndex = Math.min(startIndex + this.leadsPerPage, filteredLeads.length);
-        const currentPageLeads = filteredLeads.slice(startIndex, endIndex);
-        
-        // Display current page leads
-        currentPageLeads.forEach(lead => {
+        // Display leads (these are already the correct page from server)
+        leads.forEach(lead => {
             const row = document.createElement('tr');
             row.innerHTML = this.generateLeadRow(lead);
             row.dataset.leadId = lead._id;
@@ -440,91 +467,118 @@ class LeadsManager {    constructor(apiManager) {
         // Initialize Bootstrap tooltips
         const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
         tooltips.forEach(tooltip => {
-            new bootstrap.Tooltip(tooltip);
-        });
+            new bootstrap.Tooltip(tooltip);        });
           // Update pagination controls
         this.updatePaginationControls();
-    }
-
-    // Update pagination controls
+    }// Update pagination controls
     updatePaginationControls() {
         const paginationContainer = document.getElementById('leads-pagination');
+        const paginationContainerTop = document.getElementById('leads-pagination-top');
         const paginationInfo = document.getElementById('pagination-info');
+        const paginationInfoTop = document.getElementById('pagination-info-top');
         const leadsPerPageSelect = document.getElementById('leads-per-page');
+        const leadsPerPageSelectTop = document.getElementById('leads-per-page-top');
         
-        if (!paginationContainer) return;
+        if (!paginationContainer && !paginationContainerTop) {
+            return;
+        }
         
-        // Update pagination info
-        if (paginationInfo) {
-            const totalLeads = this.filteredLeads.length;
-            if (totalLeads === 0) {
-                paginationInfo.textContent = 'No leads to display';
-            } else {
+        // Update pagination info for both top and bottom
+        const infoText = this.totalCount === 0 
+            ? 'No leads to display' 
+            : (() => {
                 const startIndex = (this.currentPage - 1) * this.leadsPerPage + 1;
-                const endIndex = Math.min(this.currentPage * this.leadsPerPage, totalLeads);
-                paginationInfo.textContent = `Showing ${startIndex}-${endIndex} of ${totalLeads} leads`;
+                const endIndex = Math.min(this.currentPage * this.leadsPerPage, this.totalCount);
+                return `Showing ${startIndex}-${endIndex} of ${this.totalCount} leads`;
+            })();
+            
+        if (paginationInfo) {
+            paginationInfo.textContent = infoText;
+        }
+        if (paginationInfoTop) {
+            paginationInfoTop.textContent = infoText;
+        }
+        
+        // Set up leads per page selectors if not already done
+        [leadsPerPageSelect, leadsPerPageSelectTop].forEach(select => {
+            if (select && !select.dataset.listenerAdded) {
+                select.value = this.leadsPerPage.toString();
+                select.addEventListener('change', async (e) => {
+                    this.leadsPerPage = parseInt(e.target.value);
+                    this.currentPage = 1; // Reset to first page
+                    
+                    // Sync both selectors
+                    [leadsPerPageSelect, leadsPerPageSelectTop].forEach(s => {
+                        if (s && s !== e.target) {
+                            s.value = e.target.value;
+                        }
+                    });
+                    
+                    await this.refreshCurrentView();
+                });
+                select.dataset.listenerAdded = 'true';
             }
+        });
+        
+        // Clear existing pagination for both containers
+        [paginationContainer, paginationContainerTop].forEach(container => {
+            if (container) {
+                container.innerHTML = '';
+            }        });
+
+        // Show pagination controls (they might be hidden initially)
+        const topPaginationParent = paginationContainerTop?.parentElement;
+        if (topPaginationParent) {
+            topPaginationParent.style.display = 'flex';
         }
-        
-        // Set up leads per page selector if not already done
-        if (leadsPerPageSelect && !leadsPerPageSelect.dataset.listenerAdded) {
-            leadsPerPageSelect.value = this.leadsPerPage.toString();
-            leadsPerPageSelect.addEventListener('change', (e) => {
-                this.leadsPerPage = parseInt(e.target.value);
-                this.currentPage = 1; // Reset to first page
-                this.refreshCurrentView();
-            });
-            leadsPerPageSelect.dataset.listenerAdded = 'true';
-        }
-        
-        // Clear existing pagination
-        paginationContainer.innerHTML = '';
-        
-        if (this.totalPages <= 1) {
-            return; // No pagination needed
-        }
-        
+          
+        // Always show pagination controls for better UX, even if there's only one page
         // Create pagination
         const pagination = document.createElement('nav');
         pagination.setAttribute('aria-label', 'Leads pagination');
         
         const ul = document.createElement('ul');
-        ul.className = 'pagination pagination-sm mb-0';
-        
-        // Previous button
+        ul.className = 'pagination pagination-sm mb-0';        // Previous button
         const prevLi = document.createElement('li');
-        prevLi.className = `page-item ${this.currentPage === 1 ? 'disabled' : ''}`;
+        prevLi.className = `page-item ${this.currentPage === 1 || this.totalPages <= 1 ? 'disabled' : ''}`;
+        const prevDisabled = this.currentPage === 1 || this.totalPages <= 1;
+        const prevStyle = prevDisabled 
+            ? 'background-color: #6c757d; border-color: #6c757d; color: white; opacity: 0.65;'
+            : 'background-color: #28a745; border-color: #28a745; color: white;';
         prevLi.innerHTML = `
-            <a class="page-link" href="#" aria-label="Previous">
+            <a class="page-link" href="#" aria-label="Previous" style="${prevStyle}">
                 <span aria-hidden="true">&laquo;</span>
             </a>
         `;
-        if (this.currentPage > 1) {
-            prevLi.querySelector('a').addEventListener('click', (e) => {
+        if (this.currentPage > 1 && this.totalPages > 1) {
+            prevLi.querySelector('a').addEventListener('click', async (e) => {
                 e.preventDefault();
-                this.goToPage(this.currentPage - 1);
+                await this.goToPage(this.currentPage - 1);
             });
         }
-        ul.appendChild(prevLi);
-        
-        // Page numbers
+        ul.appendChild(prevLi);        // Page numbers
         const maxVisiblePages = 5;
         let startPage = Math.max(1, this.currentPage - Math.floor(maxVisiblePages / 2));
-        let endPage = Math.min(this.totalPages, startPage + maxVisiblePages - 1);
+        let endPage = Math.min(Math.max(1, this.totalPages), startPage + maxVisiblePages - 1);
         
         // Adjust start page if we're near the end
         if (endPage - startPage < maxVisiblePages - 1) {
             startPage = Math.max(1, endPage - maxVisiblePages + 1);
         }
         
-        // First page + ellipsis
+        // Always show at least page 1
+        if (this.totalPages === 0) {
+            startPage = 1;
+            endPage = 1;
+        }
+          // First page + ellipsis
         if (startPage > 1) {
             const firstLi = document.createElement('li');
             firstLi.className = 'page-item';
-            firstLi.innerHTML = '<a class="page-link" href="#">1</a>';
-            firstLi.querySelector('a').addEventListener('click', (e) => {
+            firstLi.innerHTML = '<a class="page-link" href="#" style="background-color: #28a745; border-color: #28a745; color: white;">1</a>';
+            firstLi.querySelector('a').addEventListener('click', async (e) => {
                 e.preventDefault();
-                this.goToPage(1);
+                await this.goToPage(1);
             });
             ul.appendChild(firstLi);
             
@@ -534,18 +588,20 @@ class LeadsManager {    constructor(apiManager) {
                 ellipsisLi.innerHTML = '<span class="page-link">...</span>';
                 ul.appendChild(ellipsisLi);
             }
-        }
-        
-        // Page number buttons
+        }        // Page number buttons
         for (let i = startPage; i <= endPage; i++) {
             const li = document.createElement('li');
             li.className = `page-item ${i === this.currentPage ? 'active' : ''}`;
-            li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+            const isActive = i === this.currentPage;
+            const greenStyle = isActive 
+                ? 'background-color: #198754; border-color: #198754; color: white;'
+                : 'background-color: #28a745; border-color: #28a745; color: white;';
+            li.innerHTML = `<a class="page-link" href="#" style="${greenStyle}">${i}</a>`;
             
-            if (i !== this.currentPage) {
-                li.querySelector('a').addEventListener('click', (e) => {
+            if (i !== this.currentPage && this.totalPages > 1) {
+                li.querySelector('a').addEventListener('click', async (e) => {
                     e.preventDefault();
-                    this.goToPage(i);
+                    await this.goToPage(i);
                 });
             }
             ul.appendChild(li);
@@ -559,64 +615,98 @@ class LeadsManager {    constructor(apiManager) {
                 ellipsisLi.innerHTML = '<span class="page-link">...</span>';
                 ul.appendChild(ellipsisLi);
             }
-            
-            const lastLi = document.createElement('li');
+              const lastLi = document.createElement('li');
             lastLi.className = 'page-item';
-            lastLi.innerHTML = `<a class="page-link" href="#">${this.totalPages}</a>`;
-            lastLi.querySelector('a').addEventListener('click', (e) => {
+            lastLi.innerHTML = `<a class="page-link" href="#" style="background-color: #28a745; border-color: #28a745; color: white;">${this.totalPages}</a>`;
+            lastLi.querySelector('a').addEventListener('click', async (e) => {
                 e.preventDefault();
-                this.goToPage(this.totalPages);
+                await this.goToPage(this.totalPages);
             });
             ul.appendChild(lastLi);
-        }
-        
-        // Next button
+        }        // Next button
         const nextLi = document.createElement('li');
-        nextLi.className = `page-item ${this.currentPage === this.totalPages ? 'disabled' : ''}`;
+        nextLi.className = `page-item ${this.currentPage === this.totalPages || this.totalPages <= 1 ? 'disabled' : ''}`;
+        const nextDisabled = this.currentPage === this.totalPages || this.totalPages <= 1;
+        const nextStyle = nextDisabled 
+            ? 'background-color: #6c757d; border-color: #6c757d; color: white; opacity: 0.65;'
+            : 'background-color: #28a745; border-color: #28a745; color: white;';
         nextLi.innerHTML = `
-            <a class="page-link" href="#" aria-label="Next">
+            <a class="page-link" href="#" aria-label="Next" style="${nextStyle}">
                 <span aria-hidden="true">&raquo;</span>
             </a>
         `;
-        if (this.currentPage < this.totalPages) {
-            nextLi.querySelector('a').addEventListener('click', (e) => {
+        if (this.currentPage < this.totalPages && this.totalPages > 1) {
+            nextLi.querySelector('a').addEventListener('click', async (e) => {
                 e.preventDefault();
-                this.goToPage(this.currentPage + 1);
+                await this.goToPage(this.currentPage + 1);
             });
         }
         ul.appendChild(nextLi);
+          pagination.appendChild(ul);
         
-        pagination.appendChild(ul);
-        paginationContainer.appendChild(pagination);
+        // Add pagination to both containers
+        [paginationContainer, paginationContainerTop].forEach(container => {
+            if (container) {
+                const paginationClone = pagination.cloneNode(true);
+                
+                // Re-attach event listeners to the cloned pagination
+                const prevBtn = paginationClone.querySelector('.page-item:first-child a');
+                const nextBtn = paginationClone.querySelector('.page-item:last-child a');
+                const pageLinks = paginationClone.querySelectorAll('.page-link');
+                
+                if (prevBtn && this.currentPage > 1) {
+                    prevBtn.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        await this.goToPage(this.currentPage - 1);
+                    });
+                }
+                
+                if (nextBtn && this.currentPage < this.totalPages) {
+                    nextBtn.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        await this.goToPage(this.currentPage + 1);
+                    });
+                }
+                
+                // Re-attach page number click handlers
+                pageLinks.forEach((link, index) => {
+                    const pageText = link.textContent;
+                    const pageNum = parseInt(pageText);
+                    if (!isNaN(pageNum) && pageNum !== this.currentPage) {
+                        link.addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            await this.goToPage(pageNum);
+                        });
+                    }
+                });                  container.appendChild(paginationClone);
+            } else {
+                console.warn('Pagination container not found');
+            }
+        });
     }
     
     // Go to specific page
-    goToPage(page) {
+    async goToPage(page) {
         if (page < 1 || page > this.totalPages) return;
         this.currentPage = page;
-        this.refreshCurrentView();
-    }
+        await this.refreshCurrentView();    }
     
     // Refresh current view with pagination
-    refreshCurrentView() {
-        // Apply current filters and refresh display
-        let filteredLeads = [...this.allLeads];
-        
-        // Apply current list filter
-        if (this.selectedListId) {
-            filteredLeads = filteredLeads.filter(lead => lead.leadList === this.selectedListId);
-        }
-        
-        // Apply current search and status filters
+    async refreshCurrentView() {
+        // Get current search and status filters from UI
         const searchInput = document.getElementById('lead-search');
         const statusFilter = document.getElementById('lead-status-filter');
         
-        const filters = {
+        this.currentFilters = {
             search: searchInput?.value || '',
-            status: statusFilter?.value || ''
-        };
-        
-        this.displayLeads(filteredLeads, filters);
+            status: statusFilter?.value || '',
+            listId: this.selectedListId // Include the selected list ID in filters
+        };        // Fetch leads for current page with current filters
+        const result = await this.fetchLeads(this.currentPage, this.leadsPerPage, this.currentFilters);
+        this.currentLeads = result.leads;
+        this.totalPages = result.pagination.totalPages;
+        this.totalCount = result.pagination.totalCount;// Display the fetched leads
+        this.displayLeads(this.currentLeads);
     }
 
     // Generate dynamic table headers
@@ -735,25 +825,16 @@ class LeadsManager {    constructor(apiManager) {
         rowHtml += `<td>${statusHtml}</td>`;
         
         return rowHtml;
-    }// Filter leads by selected list
-    filterLeadsByList() {
-        let filteredLeads = [...this.allLeads];
+    }    // Filter leads by selected list (now triggers server fetch)
+    async filterLeadsByList() {
+        // Reset to first page when filtering
+        this.currentPage = 1;
         
-        if (this.selectedListId) {
-            filteredLeads = filteredLeads.filter(lead => lead.leadList === this.selectedListId);
-        }
-        
-        // Apply other filters as well
-        const searchInput = document.getElementById('lead-search');
-        const statusFilter = document.getElementById('lead-status-filter');
-        
-        const filters = {
-            search: searchInput?.value || '',
-            status: statusFilter?.value || ''
-        };
-        
-        this.displayLeads(filteredLeads, filters);
-    }    // Set up lead filters
+        // Refresh view with current filters
+        await this.refreshCurrentView();
+    }
+
+    // Set up lead filters
     setupLeadFilters() {
         // Clean up existing filter listeners first
         this.cleanupFilterEventListeners();
@@ -766,29 +847,34 @@ class LeadsManager {    constructor(apiManager) {
         // Populate list filter dropdown
         this.populateListFilterDropdown();
         
-        // Function to apply filters
-        const applyFilters = () => {
-            let filteredLeads = [...this.allLeads];
-              // Filter by selected list
-            const selectedListId = listFilter?.value || this.selectedListId;
-            if (selectedListId) {
-                filteredLeads = filteredLeads.filter(lead => lead.leadList === selectedListId);
-            }
-            
-            const filters = {
+        // Function to apply filters (now with server-side pagination)
+        const applyFilters = async () => {
+            // Update current filters
+            this.currentFilters = {
                 search: searchInput?.value || '',
                 status: statusFilter?.value || ''
             };
-            this.displayLeads(filteredLeads, filters);
+            
+            // Reset to first page when applying new filters
+            this.currentPage = 1;
+            
+            // Refresh view with new filters
+            await this.refreshCurrentView();
         };
 
         // Set up event listeners and track them
         if (searchInput) {
-            searchInput.addEventListener('input', applyFilters);
+            // Use debouncing for search input to avoid too many API calls
+            let searchTimeout;
+            const debouncedSearch = () => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(applyFilters, 500); // 500ms delay
+            };
+              searchInput.addEventListener('input', debouncedSearch);
             this.eventListeners.push({
                 element: searchInput,
                 event: 'input',
-                handler: applyFilters
+                handler: debouncedSearch
             });
         }
         
@@ -802,9 +888,9 @@ class LeadsManager {    constructor(apiManager) {
         }
         
         if (listFilter) {
-            const listFilterHandler = (e) => {
+            const listFilterHandler = async (e) => {
                 const listId = e.target.value || null;
-                this.selectLeadList(listId);
+                await this.selectLeadList(listId);
             };
             listFilter.addEventListener('change', listFilterHandler);
             this.eventListeners.push({
@@ -814,13 +900,13 @@ class LeadsManager {    constructor(apiManager) {
             });
         }
           if (resetFiltersBtn) {
-            const resetHandler = () => {
+            const resetHandler = async () => {
                 if (searchInput) searchInput.value = '';
                 if (statusFilter) statusFilter.value = '';
                 if (listFilter) listFilter.value = '';
                 // Select first available list instead of null
                 if (this.allLeadLists.length > 0) {
-                    this.selectLeadList(this.allLeadLists[0]._id);
+                    await this.selectLeadList(this.allLeadLists[0]._id);
                 }
             };
             resetFiltersBtn.addEventListener('click', resetHandler);
@@ -829,7 +915,8 @@ class LeadsManager {    constructor(apiManager) {
                 event: 'click',
                 handler: resetHandler
             });
-        }    }
+        }
+    }
 
     // Populate list filter dropdown
     populateListFilterDropdown() {
@@ -1531,12 +1618,11 @@ class LeadsManager {    constructor(apiManager) {
             if (!response.ok) {
                 throw new Error('Failed to update lead status');
             }
-            
-            // Update the lead in our local array
-            const leadIndex = this.allLeads.findIndex(lead => lead._id === leadId);
+              // Update the lead in our local array
+            const leadIndex = this.currentLeads.findIndex(lead => lead._id === leadId);
             if (leadIndex !== -1) {
-                this.allLeads[leadIndex].status = newStatus;
-            }            // Visual feedback - briefly highlight the dropdown with classes
+                this.currentLeads[leadIndex].status = newStatus;
+            }// Visual feedback - briefly highlight the dropdown with classes
             const dropdown = document.querySelector(`[data-lead-id="${leadId}"]`);
             if (dropdown) {
                 // Add animation and success feedback classes
@@ -1559,11 +1645,10 @@ class LeadsManager {    constructor(apiManager) {
         } catch (err) {
             console.error('Error updating lead status:', err);
             this.apiManager.showAlert(`Error updating status: ${err.message}`, 'danger');
-            
-            // Revert the dropdown to the previous value
+              // Revert the dropdown to the previous value
             const dropdown = document.querySelector(`[data-lead-id="${leadId}"]`);
             if (dropdown) {
-                const lead = this.allLeads.find(l => l._id === leadId);
+                const lead = this.currentLeads.find(l => l._id === leadId);
                 if (lead) {
                     dropdown.value = lead.status;
                 }
@@ -1709,11 +1794,14 @@ class LeadsManager {    constructor(apiManager) {
         this.stopAutoRefresh();
         
         // Always enable auto-refresh when this method is called
-        this.autoRefreshEnabled = true;
-          this.autoRefreshInterval = setInterval(async () => {
+        this.autoRefreshEnabled = true;        this.autoRefreshInterval = setInterval(async () => {
             // Only refresh if the leads page is active
             if (this.isLeadsPageActive) {
-                await this.refreshLeadsData();
+                if (this.useOptimizedRefresh) {
+                    await this.refreshCurrentPageOnly();
+                } else {
+                    await this.refreshLeadsData();
+                }
             }
         }, this.refreshIntervalMs);
     }    // Stop auto-refresh
@@ -1723,7 +1811,7 @@ class LeadsManager {    constructor(apiManager) {
             this.autoRefreshInterval = null;
             this.autoRefreshEnabled = false;
         }
-    }// Set leads page active state
+    }    // Set leads page active state
     setPageActive(isActive) {
         this.isLeadsPageActive = isActive;
         
@@ -1731,6 +1819,143 @@ class LeadsManager {    constructor(apiManager) {
             this.startAutoRefresh();
         } else {
             this.stopAutoRefresh();
+        }
+    }
+
+    // Toggle between optimized and full refresh modes
+    setOptimizedRefresh(enabled) {
+        this.useOptimizedRefresh = enabled;
+        console.log(`Auto-refresh mode: ${enabled ? 'Optimized (current page only)' : 'Full refresh'}`);
+    }
+
+    // Optimized auto-refresh: only refresh current page data
+    async refreshCurrentPageOnly() {
+        try {
+            // Only proceed if we have a selected list
+            if (!this.selectedListId) {
+                return;
+            }
+            
+            // Fetch only the current page of leads with current filters
+            const result = await this.fetchLeads(this.currentPage, this.leadsPerPage, this.currentFilters);
+            
+            // Store the current leads data
+            const newLeads = result.leads;
+            const newTotalPages = result.pagination.totalPages;
+            const newTotalCount = result.pagination.totalCount;
+            
+            // Check if pagination changed (new leads added/removed that affect total pages)
+            const paginationChanged = (this.totalPages !== newTotalPages || this.totalCount !== newTotalCount);
+            
+            // Update our data
+            this.currentLeads = newLeads;
+            this.totalPages = newTotalPages;
+            this.totalCount = newTotalCount;
+            
+            // Only update the table body content (most efficient)
+            this.updateTableBodyOnly(newLeads);
+            
+            // If pagination changed, update pagination controls
+            if (paginationChanged) {
+                this.updatePaginationInfo();
+            }
+            
+        } catch (err) {
+            console.error('Error during optimized page refresh:', err);
+            // On error, fall back to full refresh
+            await this.refreshLeadsData();
+        }
+    }
+
+    // Update only the table body content without rebuilding headers or pagination
+    updateTableBodyOnly(leads) {
+        const tableBody = document.getElementById('leads-table-body');
+        const noLeadsMessage = document.getElementById('no-leads-message');
+        
+        if (!tableBody) return;
+        
+        // Clean up existing row event listeners
+        this.cleanupRowEventListeners();
+        
+        tableBody.innerHTML = '';
+        
+        // Show/hide no leads message
+        if (leads.length === 0) {
+            if (noLeadsMessage) noLeadsMessage.style.display = 'block';
+            return;
+        } else {
+            if (noLeadsMessage) noLeadsMessage.style.display = 'none';
+        }
+        
+        // Add new lead rows
+        leads.forEach(lead => {
+            const row = document.createElement('tr');
+            row.innerHTML = this.generateLeadRow(lead);
+            row.dataset.leadId = lead._id;
+            
+            // Check if lead is owned
+            const isOwned = lead.assignedTo && lead.assignedTo._id;
+            
+            // Make all leads clickable
+            row.style.cursor = 'pointer';
+            
+            if (isOwned) {
+                row.classList.add('owned-lead');
+            }
+            
+            // Add row click handler
+            const rowClickHandler = (e) => {
+                if (!e.target.closest('.dropdown') && !e.target.closest('button') && !e.target.closest('select')) {
+                    this.openEditLeadModal(lead);
+                }
+            };
+            row.addEventListener('click', rowClickHandler);
+            
+            this.eventListeners.push({
+                element: row,
+                event: 'click',
+                handler: rowClickHandler
+            });
+            
+            tableBody.appendChild(row);
+        });
+        
+        // Apply status colors to all dropdowns
+        this.applyStatusColors();
+        
+        // Initialize Bootstrap tooltips for new elements
+        const tooltips = tableBody.querySelectorAll('[data-bs-toggle="tooltip"]');
+        tooltips.forEach(tooltip => {
+            new bootstrap.Tooltip(tooltip);
+        });
+    }
+
+    // Update only pagination info text (not the buttons)
+    updatePaginationInfo() {
+        const paginationInfo = document.getElementById('pagination-info');
+        const paginationInfoTop = document.getElementById('pagination-info-top');
+        
+        const infoText = this.totalCount === 0 
+            ? 'No leads to display' 
+            : (() => {
+                const startIndex = (this.currentPage - 1) * this.leadsPerPage + 1;
+                const endIndex = Math.min(this.currentPage * this.leadsPerPage, this.totalCount);
+                return `Showing ${startIndex}-${endIndex} of ${this.totalCount} leads`;
+            })();
+            
+        if (paginationInfo) {
+            paginationInfo.textContent = infoText;
+        }
+        if (paginationInfoTop) {
+            paginationInfoTop.textContent = infoText;
+        }
+        
+        // If total pages changed significantly, we may need to rebuild pagination
+        // This happens when leads are added/removed affecting total count
+        const currentPaginationPages = document.querySelectorAll('#leads-pagination .page-link').length;
+        if (Math.abs(currentPaginationPages - this.totalPages) > 2) {
+            // Significant change in pages, rebuild pagination
+            this.updatePaginationControls();
         }
     }
 
@@ -1806,6 +2031,5 @@ window.addEventListener('focus', () => {
 window.addEventListener('blur', () => {
     // Window lost focus - pause auto-refresh
     if (window.leadsManager) {
-        window.leadsManager.setPageActive(false);
-    }
+        window.leadsManager.setPageActive(false);    }
 });

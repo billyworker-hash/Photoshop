@@ -1,18 +1,22 @@
 // Upload.js - Handles lead list management functionality
-class UploadManager {    constructor(apiManager) {
+class UploadManager {
+    constructor(apiManager) {
         this.apiManager = apiManager;
         this.selectedListId = null;
         this.selectedList = null; // Store the selected list object with its labels
-        
-        // Pagination properties for leads
+
+        // Pagination properties for leads - now server-side pagination
         this.currentPage = 1;
-        this.leadsPerPage = 10; // Default to 10 leads per page
+        this.leadsPerPage = 10; // Default batch size
         this.totalPages = 1;
-        this.filteredLeads = [];        this.allLeads = []; // Store all leads for the selected list
+        this.totalCount = 0;
+        this.currentLeads = []; // Current page leads from server
+        this.currentFilters = {}; // Track current search/status filters
+
         this.eventListeners = []; // Track event listeners for cleanup
         this.filterListenersSetup = false; // Track if filter listeners are already set up
         this.listSearchSetup = false; // Track if list search is already set up
-        
+
         // Pagination properties for lists
         this.listsCurrentPage = 1;
         this.listsPerPage = 6; // 6 lists per page
@@ -62,26 +66,33 @@ class UploadManager {    constructor(apiManager) {
     async loadSelectedListDetails(listId) {
         try {
             const list = await this.apiManager.get(`/lead-lists/${listId}`);
-            const leads = await this.apiManager.get(`/leads?leadList=${listId}`);
+
+            // Fetch first batch of leads with pagination
+            const result = await this.fetchLeadsForList(listId, 1, this.leadsPerPage, this.currentFilters);
 
             this.selectedList = list; // Store the list object with its labels
-            this.renderSelectedList(list, leads);
+            this.currentLeads = result.leads;
+            this.currentPage = result.pagination.currentPage;
+            this.totalPages = result.pagination.totalPages;
+            this.totalCount = result.pagination.totalCount;
+
+            this.renderSelectedList(list, result);
         } catch (error) {
             console.error('Error loading list details:', error);
-            
+
             // If list not found (404), clear selection and reload lists
             if (error.message && error.message.includes('Not Found')) {
                 console.log('List not found, clearing selection and reloading lists');
                 this.selectedListId = null;
                 this.selectedList = null;
                 this.showError('Selected list no longer exists. Please select another list.');
-                
+
                 // Clear the selected list display
                 const container = document.getElementById('selected-list-container');
                 if (container) {
                     container.innerHTML = '<p class="text-muted">No list selected</p>';
                 }
-                
+
                 // Reload the list to refresh the UI
                 await this.loadLeadLists();
             } else {
@@ -89,7 +100,7 @@ class UploadManager {    constructor(apiManager) {
             }
         }
     }    // Render selected list details
-    renderSelectedList(list, leads) {
+    renderSelectedList(list, result) {
         const selectedPanel = document.getElementById('selected-list-panel');
         const noSelectionPanel = document.getElementById('no-list-selected');
         const titleElement = document.getElementById('selected-list-title');
@@ -103,16 +114,17 @@ class UploadManager {    constructor(apiManager) {
 
         if (titleElement) {
             titleElement.textContent = list.name;
-        }if (infoElement) {
+        } if (infoElement) {
             // Check if user is admin to show visibility info
             const currentUser = this.apiManager.getCurrentUser();
             const isAdmin = currentUser && currentUser.role === 'admin';
-              let visibilityInfo = '';
+            let visibilityInfo = '';
             if (isAdmin) {
                 if (list.isVisibleToUsers !== false) {
-                    visibilityInfo = `<p class="mb-1"><strong>Visibility:</strong> Visible to all agents</p>`;                } else {
+                    visibilityInfo = `<p class="mb-1"><strong>Visibility:</strong> Visible to all agents</p>`;
+                } else {
                     if (list.visibleToSpecificAgents && list.visibleToSpecificAgents.length > 0) {
-                        const agentNames = list.visibleToSpecificAgents.map(agent => 
+                        const agentNames = list.visibleToSpecificAgents.map(agent =>
                             agent.name || agent
                         ).join(', ');
                         visibilityInfo = `<p class="mb-1"><strong>Visibility:</strong> <span class="text-info">Visible only to: ${agentNames}</span></p>`;
@@ -121,46 +133,45 @@ class UploadManager {    constructor(apiManager) {
                     }
                 }
             }
-            
+
             infoElement.innerHTML = `
                 <div class="row">
                     <div class="col-md-6">
                         <p class="mb-1"><strong>Description:</strong> ${list.description || 'No description'}</p>
                         <p class="mb-1"><strong>Created:</strong> ${new Date(list.createdAt).toLocaleDateString()}</p>
-                        ${visibilityInfo}
+                        
                     </div>
                     <div class="col-md-6">
-                        <p class="mb-1"><strong>Total Leads:</strong> ${leads.length}</p>
-                        <p class="mb-1"><strong>Last Updated:</strong> ${new Date(list.updatedAt).toLocaleDateString()}</p>
+                        <p class="mb-1"><strong>Total Leads:</strong> ${this.totalCount || 0}</p>
+           ${visibilityInfo}
                     </div>
                 </div>
             `;
-        }        if (leadsElement) {
-            this.renderListLeadsWithPagination(leads);
+        } if (leadsElement) {
+            this.renderListLeadsWithPagination();
         }
-    }
+    }    // Render leads for the selected list with pagination (now server-side)
+    renderListLeadsWithPagination() {
+        // Reset to first page when selecting a new list if this is the first call
+        if (!this.filterListenersSetup) {
+            this.currentPage = 1;
+        }
 
-    // Render leads for the selected list with pagination
-    renderListLeadsWithPagination(leads) {
-        // Store all leads for filtering and pagination
-        this.allLeads = leads;
-        this.currentPage = 1; // Reset to first page when selecting a new list
-        
         // Set up filters if not already done
         if (!this.filterListenersSetup) {
             this.setupUploadFilters();
             this.filterListenersSetup = true;
         }
 
-        // Apply current filters and display leads
-        this.applyFiltersAndDisplay();
-    }    // Render leads for the selected list (legacy method - now calls pagination version)
+        // Display current leads with pagination
+        this.displayLeadsWithPagination();
+    }// Render leads for the selected list (legacy method - now calls pagination version)
     renderListLeads(leads) {
         this.renderListLeadsWithPagination(leads);
     }// Render individual lead row
     renderLeadRow(lead) {
         let customFieldsCells = '';
-        
+
         // Add list-specific label data
         if (this.selectedList && this.selectedList.labels && this.selectedList.labels.length > 0) {
             this.selectedList.labels.forEach(label => {
@@ -192,7 +203,7 @@ class UploadManager {    constructor(apiManager) {
 
         // Add default labels
         this.addDefaultLabels();
-        
+
         // Setup agent selection
         await this.setupAgentSelection();
 
@@ -217,7 +228,7 @@ class UploadManager {    constructor(apiManager) {
                 labels: labels,
                 isVisibleToUsers: isVisibleToUsers,
                 visibleToSpecificAgents: visibleToSpecificAgents
-            });            this.showSuccess('Lead list created successfully');
+            }); this.showSuccess('Lead list created successfully');
             await this.loadLeadLists();
 
             // Navigate to the page containing the new list
@@ -237,12 +248,13 @@ class UploadManager {    constructor(apiManager) {
 
         } catch (error) {
             console.error('Error creating list:', error);
-            this.showError('Failed to create lead list');        }
+            this.showError('Failed to create lead list');
+        }
     }
 
     // Update lead list    
     // Delete lead list    
-    
+
     // Bulk add leads to selected list
     async bulkAddLeads(leadsData) {
         if (!this.selectedListId) {
@@ -389,7 +401,7 @@ class UploadManager {    constructor(apiManager) {
         } else {
             let warningClass = '';
             let warningText = '';
-            
+
             if (maxLines > 500) {
                 warningClass = 'text-warning';
                 warningText = ' ⚠️ Large upload - may take several minutes';
@@ -397,7 +409,7 @@ class UploadManager {    constructor(apiManager) {
                 warningClass = 'text-danger';
                 warningText = ' ⚠️ Very large upload - consider splitting into batches';
             }
-            
+
             previewElement.innerHTML = `<strong class="${warningClass}">${maxLines} lead${maxLines === 1 ? '' : 's'} will be created:</strong> ${sampleValues.join(', ')}${maxLines > 3 ? ` and ${maxLines - 3} more...` : ''}${warningText}`;
         }
     }// Process bulk add form submission
@@ -578,7 +590,8 @@ class UploadManager {    constructor(apiManager) {
             </div>
         `;
 
-        document.body.insertAdjacentHTML('beforeend', modalHtml);    }
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
 
     // Add custom label field to create form
     addCustomLabel() {
@@ -766,7 +779,7 @@ class UploadManager {    constructor(apiManager) {
     // Handle create list form submission
     async handleCreateList(event) {
         event.preventDefault();
-        
+
         const formData = new FormData(event.target);
         const name = formData.get('name');
         const description = formData.get('description');
@@ -786,13 +799,13 @@ class UploadManager {    constructor(apiManager) {
             // Extract the actual index from the input name attribute
             const nameInput = row.querySelector('input[name*="[name]"]');
             if (!nameInput) return;
-            
+
             const nameAttr = nameInput.getAttribute('name');
             const indexMatch = nameAttr.match(/labels\[(\d+)\]/);
             if (!indexMatch) return;
-            
+
             const actualIndex = indexMatch[1];
-            
+
             const labelName = formData.get(`labels[${actualIndex}][name]`);
             const labelLabel = formData.get(`labels[${actualIndex}][label]`);
             const labelType = formData.get(`labels[${actualIndex}][type]`);
@@ -817,7 +830,7 @@ class UploadManager {    constructor(apiManager) {
 
         await this.createList(name, description, labels, isVisibleToUsers, visibleToSpecificAgents);
         event.target.reset();
-        
+
         // Clear custom labels
         if (container) container.innerHTML = '';
     }
@@ -825,7 +838,7 @@ class UploadManager {    constructor(apiManager) {
     // Handle bulk add form submission
     async handleBulkAdd(event) {
         const formData = new FormData(event.target);
-        await this.processBulkAddForm(formData);        event.target.reset();
+        await this.processBulkAddForm(formData); event.target.reset();
     }
 
     // Edit the currently selected list
@@ -843,26 +856,27 @@ class UploadManager {    constructor(apiManager) {
             this.showError('No list selected');
             return;
         }
-        this.deleteList(this.selectedListId);    }
+        this.deleteList(this.selectedListId);
+    }
 
     // Show edit list modal with current list data
     async editList(listId) {
         try {
             const list = await this.apiManager.get(`/lead-lists/${listId}`);
-            
+
             // Populate form fields
             document.getElementById('editListId').value = list._id;
             document.getElementById('editListName').value = list.name;
             document.getElementById('editListDescription').value = list.description || '';
             document.getElementById('edit-list-visible').checked = list.isVisibleToUsers;
-            
+
             // Setup agent selection with current selections
             await this.setupEditAgentSelection(list.visibleToSpecificAgents || []);
-            
+
             // Show modal
             const modal = new bootstrap.Modal(document.getElementById('editListModal'));
             modal.show();
-            
+
         } catch (error) {
             console.error('Error loading list for edit:', error);
             this.showError('Failed to load list details');
@@ -874,7 +888,7 @@ class UploadManager {    constructor(apiManager) {
         try {
             const users = await this.apiManager.get('/users');
             const agents = users.filter(user => user.role === 'agent');
-            
+
             const container = document.getElementById('editSpecificAgentsList');
             container.innerHTML = agents.map(agent => `
                 <div class="form-check">
@@ -888,7 +902,7 @@ class UploadManager {    constructor(apiManager) {
                     </label>
                 </div>
             `).join('');
-            
+
         } catch (error) {
             console.error('Error loading agents:', error);
         }
@@ -898,12 +912,13 @@ class UploadManager {    constructor(apiManager) {
     toggleEditSpecificAgents() {
         const isVisibleToUsers = document.getElementById('editIsVisibleToUsers').checked;
         const specificAgentsSection = document.getElementById('editSpecificAgentsSection');
-        specificAgentsSection.style.display = isVisibleToUsers ? 'none' : 'block';    }
+        specificAgentsSection.style.display = isVisibleToUsers ? 'none' : 'block';
+    }
 
     // Handle edit list form submission
     async handleEditList(event) {
         event.preventDefault();
-        
+
         const formData = new FormData(event.target);
         const listId = formData.get('listId');
         const name = formData.get('name');
@@ -957,7 +972,7 @@ class UploadManager {    constructor(apiManager) {
             'list',
             'This will also remove all leads in the list.'
         );
-        
+
         if (!confirmed) {
             return;
         }
@@ -982,16 +997,16 @@ class UploadManager {    constructor(apiManager) {
     async confirmDeleteList() {
         const listId = document.getElementById('editListId').value;
         const listName = document.getElementById('editListName').value;
-        
+
         const confirmed = await window.confirmationModal.confirmDelete(
             listName,
             'list',
             'This will permanently delete the list and all associated leads. This action cannot be undone.'
         );
-        
+
         if (confirmed) {
             this.deleteList(listId);
-            
+
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('editListModal'));
             modal.hide();
@@ -1003,7 +1018,7 @@ class UploadManager {    constructor(apiManager) {
             'list',
             `This list contains ${leadCount} lead${leadCount !== 1 ? 's' : ''}. This will permanently delete the list and all associated leads. This action cannot be undone.`
         );
-        
+
         if (confirmed) {
             this.deleteListById(listId);
         }
@@ -1014,10 +1029,10 @@ class UploadManager {    constructor(apiManager) {
         try {
             await this.apiManager.delete(`/lead-lists/${listId}?hard=true`);
             this.showSuccess('Lead list deleted successfully');
-            
+
             // Reload the lists
             await this.loadLeadLists();
-            
+
             // If this was the selected list, clear the selection
             if (this.selectedListId === listId) {
                 this.selectedListId = null;
@@ -1037,7 +1052,7 @@ class UploadManager {    constructor(apiManager) {
             'lead',
             'This will remove the lead from the current list.'
         );
-        
+
         if (!confirmed) {
             return;
         }
@@ -1112,7 +1127,7 @@ class UploadManager {    constructor(apiManager) {
         `).join('');
 
         // Handle visibility toggle
-        visibilityCheckbox.addEventListener('change', function() {
+        visibilityCheckbox.addEventListener('change', function () {
             if (this.checked) {
                 specificAgentsSection.style.display = 'none';
                 // Uncheck all agent checkboxes when switching to "visible to all"
@@ -1132,7 +1147,7 @@ class UploadManager {    constructor(apiManager) {
         if (!agentsContainer || !visibilityCheckbox || !specificAgentsSection) return;
 
         // Extract agent IDs from the selectedAgents array (handles both ID strings and agent objects)
-        const selectedAgentIds = selectedAgents.map(agent => 
+        const selectedAgentIds = selectedAgents.map(agent =>
             typeof agent === 'string' ? agent : agent._id
         );
 
@@ -1148,7 +1163,7 @@ class UploadManager {    constructor(apiManager) {
         `).join('');
 
         // Handle visibility toggle
-        visibilityCheckbox.addEventListener('change', function() {
+        visibilityCheckbox.addEventListener('change', function () {
             if (this.checked) {
                 specificAgentsSection.style.display = 'none';
                 // Uncheck all agent checkboxes when switching to "visible to all"
@@ -1172,182 +1187,218 @@ class UploadManager {    constructor(apiManager) {
 
     // Show error message
     showError(message) {
-        this.apiManager.showAlert(message, 'danger', 'list-error');    }
-
-    // Set up event listeners for upload filters
+        this.apiManager.showAlert(message, 'danger', 'list-error');
+    }    // Set up event listeners for upload filters
     setupUploadFilters() {
         const searchInput = document.getElementById('upload-lead-search');
         const statusFilter = document.getElementById('upload-lead-status-filter');
-        
-        // Set up search input listener
+
+        // Set up search input listener with debouncing
         if (searchInput) {
-            searchInput.addEventListener('input', () => {
-                this.currentPage = 1; // Reset to first page when filtering
-                this.applyFiltersAndDisplay();
-            });
+            let searchTimeout;
+            const debouncedSearch = () => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(async () => {
+                    this.currentPage = 1; // Reset to first page when filtering
+                    await this.applyFiltersAndDisplay();
+                }, 500); // 500ms delay
+            };
+
+            searchInput.addEventListener('input', debouncedSearch);
         }
-        
+
         // Set up status filter listener
         if (statusFilter) {
-            statusFilter.addEventListener('change', () => {
+            statusFilter.addEventListener('change', async () => {
                 this.currentPage = 1; // Reset to first page when filtering
-                this.applyFiltersAndDisplay();
+                await this.applyFiltersAndDisplay();
             });
+        }
+    }// Apply filters and display leads with pagination (now server-side)
+    async applyFiltersAndDisplay() {
+        if (!this.selectedListId) return;
+
+        // Get current filter values
+        const searchInput = document.getElementById('upload-lead-search');
+        const statusFilter = document.getElementById('upload-lead-status-filter');
+
+        this.currentFilters = {
+            search: searchInput?.value || '',
+            status: statusFilter?.value || ''
+        };
+
+        // Reset to first page when applying new filters
+        this.currentPage = 1;
+
+        // Fetch leads with current filters
+        const result = await this.fetchLeadsForList(
+            this.selectedListId,
+            this.currentPage,
+            this.leadsPerPage,
+            this.currentFilters
+        );
+
+        this.currentLeads = result.leads;
+        this.totalPages = result.pagination.totalPages;
+        this.totalCount = result.pagination.totalCount;
+        // Display the fetched leads
+        this.displayLeadsWithPagination();
+    }
+
+    // Display leads with pagination
+    displayLeadsWithPagination() {
+        const leadsContainer = document.getElementById('selected-list-leads');
+        if (!leadsContainer) return;
+
+        // Generate table headers
+        this.generateTableHeaders();
+
+        // Display current leads
+        this.displayCurrentLeads();
+
+        // Update pagination controls
+        this.updateUploadPaginationControls();
+    }
+
+    // Generate table headers for upload section
+    generateTableHeaders() {
+        const leadsContainer = document.getElementById('selected-list-leads');
+        if (!leadsContainer) return;
+
+        let headerHtml = '';
+
+        // Add list-specific label columns if a list is selected
+        if (this.selectedList && this.selectedList.labels && this.selectedList.labels.length > 0) {
+            this.selectedList.labels.forEach(label => {
+                headerHtml += `<th>${label.label}</th>`;
+            });
+        }
+
+        // Add status and actions columns
+        headerHtml += `<th>Status</th><th>Actions</th>`;
+
+        // Find or create table header
+        let tableHeader = leadsContainer.querySelector('thead tr');
+        if (!tableHeader) {
+            // Create table structure if it doesn't exist
+            leadsContainer.innerHTML = `
+                <table class="table table-striped">
+                    <thead>
+                        <tr>${headerHtml}</tr>
+                    </thead>
+                    <tbody id="upload-leads-tbody">
+                    </tbody>
+                </table>
+            `;
+        } else {
+            tableHeader.innerHTML = headerHtml;
         }
     }
 
-    // Apply filters and display leads with pagination
-    applyFiltersAndDisplay() {
-        const searchInput = document.getElementById('upload-lead-search');
-        const statusFilter = document.getElementById('upload-lead-status-filter');
-        
-        let filteredLeads = [...this.allLeads];
-        
-        // Apply search filter
-        if (searchInput && searchInput.value) {
-            const searchTerm = searchInput.value.toLowerCase();
-            filteredLeads = filteredLeads.filter(lead => {
-                // Search in standard fields
-                const standardMatch = lead.fullName?.toLowerCase().includes(searchTerm) || 
-                                    lead.email?.toLowerCase().includes(searchTerm) || 
-                                    lead.phone?.toLowerCase().includes(searchTerm);
-                
-                // Search in list-specific custom fields
-                let customMatch = false;
-                if (this.selectedList && this.selectedList.labels) {
-                    customMatch = this.selectedList.labels.some(label => {
-                        const value = lead.customFields?.[label.name];
-                        return value && value.toString().toLowerCase().includes(searchTerm);
-                    });
-                }
-                
-                return standardMatch || customMatch;
-            });
-        }
-        
-        // Apply status filter
-        if (statusFilter && statusFilter.value && statusFilter.value !== '') {
-            filteredLeads = filteredLeads.filter(lead => lead.status === statusFilter.value);
-        }
-        
-        // Store filtered leads for pagination
-        this.filteredLeads = filteredLeads;
-        
-        // Calculate pagination
-        this.totalPages = Math.ceil(filteredLeads.length / this.leadsPerPage);
-        if (this.currentPage > this.totalPages) {
-            this.currentPage = Math.max(1, this.totalPages);
-        }
-        
-        // Display leads with pagination
-        this.displayLeadsWithPagination(filteredLeads);
-    }    // Display leads with pagination
-    displayLeadsWithPagination(leads) {
-        const leadsElement = document.getElementById('selected-list-leads');
-        const paginationSection = document.getElementById('upload-pagination-section');
-        
-        if (!leadsElement) return;
+    // Display current leads in upload section
+    displayCurrentLeads() {
+        const tbody = document.getElementById('upload-leads-tbody');
+        if (!tbody) return;
 
-        if (leads.length === 0) {
-            leadsElement.innerHTML = `
-                <div class="text-center text-muted py-4">
-                    <i class="bi bi-person-plus fs-1"></i>
-                    <p class="mt-2">No leads found</p>
-                    <button class="btn btn-primary" onclick="window.uploadManager.showBulkAddModal()">
-                        Add First Leads
-                    </button>
-                </div>
+        tbody.innerHTML = '';
+
+        if (this.currentLeads.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="100%" class="text-center text-muted py-4">
+                        No leads found
+                    </td>
+                </tr>
             `;
-            if (paginationSection) paginationSection.style.display = 'none';
             return;
         }
 
+        this.currentLeads.forEach(lead => {
+            const row = document.createElement('tr');
+            row.innerHTML = this.renderLeadRow(lead);
+            row.dataset.leadId = lead._id;
+            tbody.appendChild(row);
+        });
+
         // Show pagination section
-        if (paginationSection) paginationSection.style.display = 'flex';
-
-        // Calculate start and end indices for current page
-        const startIndex = (this.currentPage - 1) * this.leadsPerPage;
-        const endIndex = Math.min(startIndex + this.leadsPerPage, leads.length);
-        const currentPageLeads = leads.slice(startIndex, endIndex);
-
-        // Generate table headers dynamically based on list labels
-        const headers = [];
-        if (this.selectedList && this.selectedList.labels) {
-            this.selectedList.labels.forEach(label => {
-                headers.push(label.label);
-            });
+        const paginationSection = document.getElementById('upload-pagination-section');
+        if (paginationSection) {
+            paginationSection.style.display = 'flex';
         }
-        
-        // Add Status and Actions as standard headers
-        headers.push('Status');
-        headers.push('Actions');
-
-        const tableHtml = `
-            <div class="table-responsive">
-                <table class="table table-sm table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            ${headers.map(header => `<th>${header}</th>`).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${currentPageLeads.map(lead => this.renderLeadRow(lead)).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-
-        leadsElement.innerHTML = tableHtml;
-        
-        // Update pagination controls
-        this.updatePaginationControls();
-    }
-    
-    // Update pagination controls
-    updatePaginationControls() {
+    }    // Update pagination controls for upload section
+    updateUploadPaginationControls() {
         const paginationContainer = document.getElementById('upload-leads-pagination');
+        const paginationContainerTop = document.getElementById('upload-leads-pagination-top');
         const paginationInfo = document.getElementById('upload-pagination-info');
+        const paginationInfoTop = document.getElementById('upload-pagination-info-top');
         const leadsPerPageSelect = document.getElementById('upload-leads-per-page');
-        
-        if (!paginationContainer) return;
-        
-        // Update pagination info
-        if (paginationInfo) {
-            const totalLeads = this.filteredLeads.length;
-            if (totalLeads === 0) {
-                paginationInfo.textContent = 'No leads to display';
-            } else {
+        const leadsPerPageSelectTop = document.getElementById('upload-leads-per-page-top');
+
+        if (!paginationContainer && !paginationContainerTop) return;
+
+        // Update pagination info for both top and bottom
+        const infoText = this.totalCount === 0
+            ? 'No leads to display'
+            : (() => {
                 const startIndex = (this.currentPage - 1) * this.leadsPerPage + 1;
-                const endIndex = Math.min(this.currentPage * this.leadsPerPage, totalLeads);
-                paginationInfo.textContent = `Showing ${startIndex}-${endIndex} of ${totalLeads} leads`;
+                const endIndex = Math.min(this.currentPage * this.leadsPerPage, this.totalCount);
+                return `Showing ${startIndex}-${endIndex} of ${this.totalCount} leads`;
+            })();
+
+        if (paginationInfo) {
+            paginationInfo.textContent = infoText;
+        }
+        if (paginationInfoTop) {
+            paginationInfoTop.textContent = infoText;
+        }
+
+        // Set up leads per page selectors if not already done
+        [leadsPerPageSelect, leadsPerPageSelectTop].forEach(select => {
+            if (select && !select.dataset.listenerAdded) {
+                select.value = this.leadsPerPage.toString();
+                select.addEventListener('change', async (e) => {
+                    this.leadsPerPage = parseInt(e.target.value);
+                    this.currentPage = 1; // Reset to first page
+
+                    // Sync both selectors
+                    [leadsPerPageSelect, leadsPerPageSelectTop].forEach(s => {
+                        if (s && s !== e.target) {
+                            s.value = e.target.value;
+                        }
+                    });
+
+                    await this.refreshCurrentView();
+                });
+                select.dataset.listenerAdded = 'true';
             }
+        });
+
+        // Show pagination sections
+        const paginationSection = document.getElementById('upload-pagination-section');
+        const paginationSectionTop = document.getElementById('upload-pagination-section-top');
+        if (paginationSection) {
+            paginationSection.style.display = 'flex';
         }
-        
-        // Set up leads per page selector if not already done
-        if (leadsPerPageSelect && !leadsPerPageSelect.dataset.listenerAdded) {
-            leadsPerPageSelect.value = this.leadsPerPage.toString();
-            leadsPerPageSelect.addEventListener('change', (e) => {
-                this.leadsPerPage = parseInt(e.target.value);
-                this.currentPage = 1; // Reset to first page
-                this.applyFiltersAndDisplay();
-            });
-            leadsPerPageSelect.dataset.listenerAdded = 'true';
+        if (paginationSectionTop) {
+            paginationSectionTop.style.display = 'flex';
         }
-        
-        // Clear existing pagination
-        paginationContainer.innerHTML = '';
-        
+
+        // Clear existing pagination for both containers
+        [paginationContainer, paginationContainerTop].forEach(container => {
+            if (container) {
+                container.innerHTML = '';
+            }
+        });
         if (this.totalPages <= 1) {
             return; // No pagination needed
         }
-        
         // Create pagination
         const pagination = document.createElement('nav');
         pagination.setAttribute('aria-label', 'Upload leads pagination');
-        
+
         const ul = document.createElement('ul');
         ul.className = 'pagination pagination-sm mb-0';
-        
+
         // Previous button
         const prevLi = document.createElement('li');
         prevLi.className = `page-item ${this.currentPage === 1 ? 'disabled' : ''}`;
@@ -1357,76 +1408,32 @@ class UploadManager {    constructor(apiManager) {
             </a>
         `;
         if (this.currentPage > 1) {
-            prevLi.querySelector('a').addEventListener('click', (e) => {
+            prevLi.querySelector('a').addEventListener('click', async (e) => {
                 e.preventDefault();
-                this.goToPage(this.currentPage - 1);
+                await this.goToUploadPage(this.currentPage - 1);
             });
         }
         ul.appendChild(prevLi);
-        
-        // Page numbers
+
+        // Page numbers (simplified version)
         const maxVisiblePages = 5;
         let startPage = Math.max(1, this.currentPage - Math.floor(maxVisiblePages / 2));
         let endPage = Math.min(this.totalPages, startPage + maxVisiblePages - 1);
-        
-        // Adjust start page if we're near the end
-        if (endPage - startPage < maxVisiblePages - 1) {
-            startPage = Math.max(1, endPage - maxVisiblePages + 1);
-        }
-        
-        // First page + ellipsis
-        if (startPage > 1) {
-            const firstLi = document.createElement('li');
-            firstLi.className = 'page-item';
-            firstLi.innerHTML = '<a class="page-link" href="#">1</a>';
-            firstLi.querySelector('a').addEventListener('click', (e) => {
-                e.preventDefault();
-                this.goToPage(1);
-            });
-            ul.appendChild(firstLi);
-            
-            if (startPage > 2) {
-                const ellipsisLi = document.createElement('li');
-                ellipsisLi.className = 'page-item disabled';
-                ellipsisLi.innerHTML = '<span class="page-link">...</span>';
-                ul.appendChild(ellipsisLi);
-            }
-        }
-        
-        // Page number buttons
+
         for (let i = startPage; i <= endPage; i++) {
             const li = document.createElement('li');
             li.className = `page-item ${i === this.currentPage ? 'active' : ''}`;
             li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
-            
+
             if (i !== this.currentPage) {
-                li.querySelector('a').addEventListener('click', (e) => {
+                li.querySelector('a').addEventListener('click', async (e) => {
                     e.preventDefault();
-                    this.goToPage(i);
+                    await this.goToUploadPage(i);
                 });
             }
             ul.appendChild(li);
         }
-        
-        // Last page + ellipsis
-        if (endPage < this.totalPages) {
-            if (endPage < this.totalPages - 1) {
-                const ellipsisLi = document.createElement('li');
-                ellipsisLi.className = 'page-item disabled';
-                ellipsisLi.innerHTML = '<span class="page-link">...</span>';
-                ul.appendChild(ellipsisLi);
-            }
-            
-            const lastLi = document.createElement('li');
-            lastLi.className = 'page-item';
-            lastLi.innerHTML = `<a class="page-link" href="#">${this.totalPages}</a>`;
-            lastLi.querySelector('a').addEventListener('click', (e) => {
-                e.preventDefault();
-                this.goToPage(this.totalPages);
-            });
-            ul.appendChild(lastLi);
-        }
-        
+
         // Next button
         const nextLi = document.createElement('li');
         nextLi.className = `page-item ${this.currentPage === this.totalPages ? 'disabled' : ''}`;
@@ -1436,24 +1443,78 @@ class UploadManager {    constructor(apiManager) {
             </a>
         `;
         if (this.currentPage < this.totalPages) {
-            nextLi.querySelector('a').addEventListener('click', (e) => {
+            nextLi.querySelector('a').addEventListener('click', async (e) => {
                 e.preventDefault();
-                this.goToPage(this.currentPage + 1);
+                await this.goToUploadPage(this.currentPage + 1);
             });
         }
         ul.appendChild(nextLi);
-        
+
         pagination.appendChild(ul);
-        paginationContainer.appendChild(pagination);
+
+        // Add pagination to both containers
+        [paginationContainer, paginationContainerTop].forEach(container => {
+            if (container) {
+                const paginationClone = pagination.cloneNode(true);
+
+                // Re-attach event listeners to the cloned pagination
+                const prevBtn = paginationClone.querySelector('.page-item:first-child a');
+                const nextBtn = paginationClone.querySelector('.page-item:last-child a');
+                const pageLinks = paginationClone.querySelectorAll('.page-link');
+
+                if (prevBtn && this.currentPage > 1) {
+                    prevBtn.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        await this.goToUploadPage(this.currentPage - 1);
+                    });
+                }
+
+                if (nextBtn && this.currentPage < this.totalPages) {
+                    nextBtn.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        await this.goToUploadPage(this.currentPage + 1);
+                    });
+                }
+
+                // Re-attach page number click handlers
+                pageLinks.forEach((link, index) => {
+                    const pageText = link.textContent;
+                    const pageNum = parseInt(pageText);
+                    if (!isNaN(pageNum) && pageNum !== this.currentPage) {
+                        link.addEventListener('click', async (e) => {
+                            e.preventDefault();
+                            await this.goToUploadPage(pageNum);
+                        });
+                    }
+                });
+
+                container.appendChild(paginationClone);
+            }
+        });
     }
-    
+
     // Go to specific page
-    goToPage(page) {
-        if (page < 1 || page > this.totalPages) return;
+    async goToUploadPage(page) {
+        if (page < 1 || page > this.totalPages || !this.selectedListId) return;
+
         this.currentPage = page;
-        this.applyFiltersAndDisplay();
+
+        // Fetch leads for the new page
+        const result = await this.fetchLeadsForList(
+            this.selectedListId,
+            this.currentPage,
+            this.leadsPerPage,
+            this.currentFilters
+        );
+
+        this.currentLeads = result.leads;
+        this.totalPages = result.pagination.totalPages;
+        this.totalCount = result.pagination.totalCount;
+
+        // Display the fetched leads
+        this.displayLeadsWithPagination();
     }
-    
+
     // Render lists pagination
     renderListsPagination() {
         if (this.listsTotalPages <= 1) {
@@ -1508,7 +1569,7 @@ class UploadManager {    constructor(apiManager) {
                 </li>
             `;
         }
-        
+
         // Last page + ellipsis
         if (endPage < this.listsTotalPages) {
             if (endPage < this.listsTotalPages - 1) {
@@ -1545,28 +1606,28 @@ class UploadManager {    constructor(apiManager) {
     }    // Navigate to the page containing a specific list
     navigateToListPage(listId) {
         if (!this.allLists || this.allLists.length === 0) return;
-        
+
         const searchInput = document.getElementById('list-search');
         const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
-        
+
         let filteredLists = [...this.allLists];
-        
+
         // Apply search filter
         if (searchTerm) {
-            filteredLists = filteredLists.filter(list => 
+            filteredLists = filteredLists.filter(list =>
                 list.name.toLowerCase().includes(searchTerm) ||
                 (list.description && list.description.toLowerCase().includes(searchTerm))
             );
         }
-        
+
         // Find the index of the list
         const listIndex = filteredLists.findIndex(list => list._id === listId);
-        
+
         if (listIndex !== -1) {
             // List is visible with current search, navigate to its page
             const targetPage = Math.ceil((listIndex + 1) / this.listsPerPage);
             this.listsCurrentPage = targetPage;
-            
+
             // Update pagination and display
             this.listsTotalPages = Math.ceil(filteredLists.length / this.listsPerPage);
             this.renderFilteredLeadLists(filteredLists);
@@ -1578,11 +1639,11 @@ class UploadManager {    constructor(apiManager) {
             // Recalculate without search filter
             filteredLists = [...this.allLists];
             const newListIndex = filteredLists.findIndex(list => list._id === listId);
-            
+
             if (newListIndex !== -1) {
                 const targetPage = Math.ceil((newListIndex + 1) / this.listsPerPage);
                 this.listsCurrentPage = targetPage;
-                
+
                 // Update pagination and display
                 this.listsTotalPages = Math.ceil(filteredLists.length / this.listsPerPage);
                 this.renderFilteredLeadLists(filteredLists);
@@ -1594,13 +1655,13 @@ class UploadManager {    constructor(apiManager) {
     setupListSearch() {
         const searchInput = document.getElementById('list-search');
         const clearButton = document.getElementById('clear-list-search');
-        
+
         if (searchInput) {
             searchInput.addEventListener('input', () => {
                 this.filterAndDisplayLists();
             });
         }
-        
+
         if (clearButton) {
             clearButton.addEventListener('click', () => {
                 searchInput.value = '';
@@ -1611,27 +1672,27 @@ class UploadManager {    constructor(apiManager) {
     filterAndDisplayLists() {
         const searchInput = document.getElementById('list-search');
         const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
-        
+
         let filteredLists = [...this.allLists];
-        
+
         // Apply search filter
         if (searchTerm) {
-            filteredLists = filteredLists.filter(list => 
+            filteredLists = filteredLists.filter(list =>
                 list.name.toLowerCase().includes(searchTerm) ||
                 (list.description && list.description.toLowerCase().includes(searchTerm))
             );
             // Reset pagination to first page only when searching
             this.listsCurrentPage = 1;
         }
-        
+
         // Update pagination based on filtered results
         this.listsTotalPages = Math.ceil(filteredLists.length / this.listsPerPage);
-        
+
         // Ensure current page is within bounds
         if (this.listsCurrentPage > this.listsTotalPages) {
             this.listsCurrentPage = Math.max(1, this.listsTotalPages);
         }
-          // Render the filtered lists
+        // Render the filtered lists
         this.renderFilteredLeadLists(filteredLists);
     }
 
@@ -1643,7 +1704,7 @@ class UploadManager {    constructor(apiManager) {
         if (lists.length === 0) {
             const searchInput = document.getElementById('list-search');
             const searchTerm = searchInput ? searchInput.value.trim() : '';
-            
+
             if (searchTerm) {
                 container.innerHTML = `
                     <div class="text-center text-muted">
@@ -1675,7 +1736,7 @@ class UploadManager {    constructor(apiManager) {
 
         // Check if user is admin to show visibility controls
         const currentUser = this.apiManager.getCurrentUser();
-        const isAdmin = currentUser && currentUser.role === 'admin';        const listsHtml = currentPageLists.map(list => {
+        const isAdmin = currentUser && currentUser.role === 'admin'; const listsHtml = currentPageLists.map(list => {
             // Create visibility toggle button and delete button for admins
             const adminButtons = isAdmin ? `
                 <div class="btn-group" role="group">
@@ -1692,7 +1753,7 @@ class UploadManager {    constructor(apiManager) {
                     </button>
                 </div>
             ` : '';
-            
+
             return `
             <div class="col-md-6 mb-3">
                 <div class="card h-100 cursor-pointer ${this.selectedListId === list._id ? 'border-primary bg-light' : ''}" 
@@ -1708,12 +1769,12 @@ class UploadManager {    constructor(apiManager) {
                                 <small class="badge bg-secondary">${list.leadCount || 0} leads</small>
                                 <small class="text-muted">${new Date(list.createdAt).toLocaleDateString()}</small>
                             </div>
-                            ${list.isVisibleToUsers === false ? 
-                                (list.visibleToSpecificAgents && list.visibleToSpecificAgents.length > 0 ? 
-                                    `<div class="mt-1"><small class="badge bg-info text-dark"><i class="bi bi-person-check"></i> Visible only to: ${list.visibleToSpecificAgents.map(agent => agent.name).join(', ')}</small></div>` :
-                                    '<div class="mt-1"><small class="badge bg-warning text-dark"><i class="bi bi-eye-slash"></i> Hidden</small></div>'
-                                ) : ''
-                            }
+                            ${list.isVisibleToUsers === false ?
+                    (list.visibleToSpecificAgents && list.visibleToSpecificAgents.length > 0 ?
+                        `<div class="mt-1"><small class="badge bg-info text-dark"><i class="bi bi-person-check"></i> Visible only to: ${list.visibleToSpecificAgents.map(agent => agent.name).join(', ')}</small></div>` :
+                        '<div class="mt-1"><small class="badge bg-warning text-dark"><i class="bi bi-eye-slash"></i> Hidden</small></div>'
+                    ) : ''
+                }
                         </div>
                     </div>
                 </div>
@@ -1726,6 +1787,70 @@ class UploadManager {    constructor(apiManager) {
             </div>
             ${this.renderListsPagination()}
         `;
+    }
+
+    // Fetch leads with pagination for a specific list
+    async fetchLeadsForList(listId, page = 1, limit = 10, filters = {}) {
+        try {
+            // Build query parameters
+            const params = new URLSearchParams({
+                leadList: listId,
+                page: page.toString(),
+                limit: limit.toString()
+            });
+
+            // Add search filter
+            if (filters.search && filters.search.trim()) {
+                params.append('search', filters.search.trim());
+            }
+
+            // Add status filter
+            if (filters.status && filters.status !== '') {
+                params.append('status', filters.status);
+            }
+
+            const response = await this.apiManager.authenticatedFetch(
+                `${this.apiManager.API_URL}/leads?${params.toString()}`
+            );
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch leads');
+            }
+
+            const data = await response.json();
+
+            // Handle both old format (array) and new format (object with pagination)
+            if (Array.isArray(data)) {
+                // Legacy format - return as-is for backward compatibility
+                return {
+                    leads: data,
+                    pagination: {
+                        currentPage: 1,
+                        totalPages: 1,
+                        totalCount: data.length,
+                        limit: data.length,
+                        hasNext: false,
+                        hasPrev: false
+                    }
+                };
+            } else {
+                // New format with pagination
+                return data;
+            }
+        } catch (err) {
+            console.error('Error fetching leads for list:', err);
+            return {
+                leads: [],
+                pagination: {
+                    currentPage: 1,
+                    totalPages: 1,
+                    totalCount: 0,
+                    limit: limit,
+                    hasNext: false,
+                    hasPrev: false
+                }
+            };
+        }
     }
 }
 

@@ -186,13 +186,27 @@ app.get('/api/leads', authenticate, async (req, res) => {
                 { email: searchRegex },
                 { phone: searchRegex }
             ];
-        }
-        
-        const leads = await Lead.find(filter)
+        }        // Pagination parameters
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        // Get total count for pagination info
+        const totalCount = await Lead.countDocuments(filter);
+          const leads = await Lead.find(filter)
             .populate('assignedTo', 'name')
             .populate('notes.createdBy', 'name')
-            .sort({ createdAt: -1 });
-        
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+            // Log the fetch operation
+        console.log(`[LEADS API] User: ${req.user.username} | Page: ${page} | Limit: ${limit} | Total Available: ${totalCount} | Fetched: ${leads.length} leads | Filters:`, {
+            leadList: req.query.leadList || 'all_active',
+            search: req.query.search || 'none',
+            status: req.query.status || 'all',
+            source: req.query.leadList ? 'upload_section' : 'leads_section'
+        });
+          
         // Convert customFields Map to Object for each lead
         const leadsResponse = leads.map(lead => {
             const leadObj = lead.toObject();
@@ -202,7 +216,18 @@ app.get('/api/leads', authenticate, async (req, res) => {
             return leadObj;
         });
         
-        res.json(leadsResponse);
+        // Send response with pagination metadata
+        res.json({
+            leads: leadsResponse,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalCount / limit),
+                totalCount: totalCount,
+                limit: limit,
+                hasNext: page < Math.ceil(totalCount / limit),
+                hasPrev: page > 1
+            }
+        });
     } catch (error) {
         console.error('Leads fetch error:', error);
         res.status(500).json({ message: 'Failed to fetch leads' });
@@ -647,19 +672,42 @@ app.get('/api/dashboard/stats', authenticate, async (req, res) => {
     try {
         const filter = req.user.role === 'agent' ? { assignedTo: req.user.id } : {};
         
-        // Get all leads
-        const leads = await Lead.find(filter);
+        console.log(`[DASHBOARD STATS] User: ${req.user.username} | Role: ${req.user.role} | Using aggregation for efficient dashboard stats`);
         
-        // Get total count
-        const totalLeads = leads.length;
-          // Get counts by status
-        const newLeads = leads.filter(lead => lead.status === 'new').length;
-        const noAnswerLeads = leads.filter(lead => lead.status === 'No Answer').length;
-        const voiceMailLeads = leads.filter(lead => lead.status === 'Voice Mail').length;
-        const callBackQualifiedLeads = leads.filter(lead => lead.status === 'Call Back Qualified').length;
-        const callBackNotQualifiedLeads = leads.filter(lead => lead.status === 'Call Back NOT Qualified').length;
+        // Use aggregation to get total count efficiently
+        const totalCountResult = await Lead.aggregate([
+            { $match: filter },
+            { $count: "totalLeads" }
+        ]);
+        const totalLeads = totalCountResult.length > 0 ? totalCountResult[0].totalLeads : 0;
         
-        // Get monthly trends (simplified for now)
+        // Use aggregation to get status breakdown efficiently
+        const statusBreakdown = await Lead.aggregate([
+            { $match: filter },
+            {
+                $group: {
+                    _id: "$status",
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+        
+        // Convert status breakdown to the expected format
+        const statusCounts = {
+            new: 0,
+            'No Answer': 0,
+            'Voice Mail': 0,
+            'Call Back Qualified': 0,
+            'Call Back NOT Qualified': 0
+        };
+        
+        statusBreakdown.forEach(item => {
+            if (statusCounts.hasOwnProperty(item._id)) {
+                statusCounts[item._id] = item.count;
+            }
+        });
+        
+        // Get monthly trends using aggregation
         const now = new Date();
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(now.getMonth() - 5);
@@ -681,15 +729,13 @@ app.get('/api/dashboard/stats', authenticate, async (req, res) => {
                 }
             },
             { $sort: { "_id.year": 1, "_id.month": 1 } }
-        ]);        res.json({
+        ]);
+        
+        console.log(`[DASHBOARD STATS] User: ${req.user.username} | Total: ${totalLeads} leads | Efficient aggregation used`);
+        
+        res.json({
             totalLeads,
-            statusBreakdown: {
-                new: newLeads,
-                'No Answer': noAnswerLeads,
-                'Voice Mail': voiceMailLeads,
-                'Call Back Qualified': callBackQualifiedLeads,
-                'Call Back NOT Qualified': callBackNotQualifiedLeads
-            },
+            statusBreakdown: statusCounts,
             monthlyTrends
         });
     } catch (err) {
@@ -924,20 +970,38 @@ app.get('/api/lead-lists', authenticate, async (req, res) => {
                 { isVisibleToUsers: true },
                 { visibleToSpecificAgents: req.user.id }
             ];
-        }
-
-        const lists = await LeadList.find(filter)
+        }        const lists = await LeadList.find(filter)
             .populate('createdBy', 'name email')
             .populate('visibleToSpecificAgents', 'name email')
             .sort({ createdAt: -1 });
+          console.log(`[LEAD-LISTS API] User: ${req.user.username} (${req.user.role}) | Found ${lists.length} lists | Using aggregation for efficient counting...`);
         
-        // Calculate lead count for each list
-        const listsWithCounts = await Promise.all(lists.map(async (list) => {
-            const leadCount = await Lead.countDocuments({ leadList: list._id });
+        // Get all lead counts in a single aggregation query - OPTIMIZED!
+        const leadCounts = await Lead.aggregate([
+            {
+                $group: {
+                    _id: '$leadList',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+        
+        // Create a map for O(1) lookup of counts
+        const countMap = new Map();
+        leadCounts.forEach(item => {
+            if (item._id) {
+                countMap.set(item._id.toString(), item.count);
+            }
+        });
+        
+        // Add counts to lists
+        const listsWithCounts = lists.map(list => {
             const listObj = list.toObject();
-            listObj.leadCount = leadCount;
+            listObj.leadCount = countMap.get(list._id.toString()) || 0;
             return listObj;
-        }));
+        });
+        
+        console.log(`[LEAD-LISTS API] User: ${req.user.username} | Optimized: 1 aggregation query instead of ${lists.length} separate queries`);
         
         res.json(listsWithCounts);
     } catch (error) {
@@ -1865,6 +1929,72 @@ app.post('/api/leads/:id/transfer', authenticate, async (req, res) => {
     } catch (error) {
         console.error('Error transferring lead:', error);
         res.status(500).json({ message: 'Failed to transfer lead' });
+    }
+});
+
+// Get lead counts for all lists (efficient endpoint)
+app.get('/api/leads/counts', authenticate, async (req, res) => {
+    try {
+        // Get all active lead lists visible to the user
+        let leadListFilter = { 
+            isActive: true, 
+            isCustomerList: { $ne: true } 
+        };
+        
+        // For non-admin users, only include lists that are visible
+        if (req.user.role !== 'admin') {
+            leadListFilter.$or = [
+                { isVisibleToUsers: true },
+                { visibleToSpecificAgents: req.user.id }
+            ];
+        }
+          const leadLists = await LeadList.find(leadListFilter).select('_id name');
+        const listIds = leadLists.map(list => list._id);
+          console.log(`[DEBUG] Found ${leadLists.length} lead lists:`, leadLists.map(l => ({ id: l._id, name: l.name })));
+        
+        // Debug: Check a few lead documents to see their structure
+        const sampleLeads = await Lead.find({}).limit(3).select('leadList');
+        console.log(`[DEBUG] Sample leads with leadList field:`, sampleLeads);
+        
+        // Use MongoDB aggregation to get counts for all lists in one query
+        const counts = await Lead.aggregate([
+            { 
+                $match: { 
+                    leadList: { $in: listIds } 
+                } 
+            },
+            {
+                $group: {
+                    _id: '$leadList',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+        
+        console.log(`[DEBUG] Aggregation result:`, counts);
+        
+        // Create a map of listId -> count
+        const countMap = {};
+        counts.forEach(item => {
+            countMap[item._id.toString()] = item.count;
+        });
+        
+        console.log(`[DEBUG] Count map:`, countMap);
+          // Return counts for each list (including 0 for lists with no leads)
+        const result = leadLists.map(list => ({
+            listId: list._id,
+            name: list.name,
+            count: countMap[list._id.toString()] || 0
+        }));
+        
+        console.log(`[DEBUG] Final result being sent:`, result);
+        
+        console.log(`[LEADS COUNTS] User: ${req.user.username} | Retrieved counts for ${result.length} lists in single query`);
+        
+        res.json(result);
+    } catch (error) {
+        console.error('Lead counts fetch error:', error);
+        res.status(500).json({ message: 'Failed to fetch lead counts' });
     }
 });
 
