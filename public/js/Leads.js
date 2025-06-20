@@ -8,7 +8,7 @@ class LeadsManager {    constructor(apiManager) {
           // Auto-refresh properties
         this.autoRefreshInterval = null;
         this.autoRefreshEnabled = false;
-        this.refreshIntervalMs = 5000; // 5 seconds
+        this.refreshIntervalMs = 10000; // 10 seconds
         this.isLeadsPageActive = false;
         this.useOptimizedRefresh = true; // Use optimized refresh by default
           // Pagination properties - now for server-side pagination
@@ -91,13 +91,14 @@ class LeadsManager {    constructor(apiManager) {
                 list.leadCount = 0;
             });
         }
-    }
-
-    // Refresh leads data only (without reinitializing UI components)
+    }    // Refresh leads data only (without reinitializing UI components)
     async refreshLeadsData() {
         try {
             // Fetch fresh lead lists data to pick up visibility changes
             await this.loadLeadLists();
+            
+            // Update lead list counts BEFORE displaying cards
+            await this.updateLeadListCounts();
             
             // Fetch fresh leads data for current page and filters
             const result = await this.fetchLeads(this.currentPage, this.leadsPerPage, this.currentFilters);
@@ -105,9 +106,7 @@ class LeadsManager {    constructor(apiManager) {
             this.totalPages = result.pagination.totalPages;
             this.totalCount = result.pagination.totalCount;
 
-            // Update lead list counts
-            await this.updateLeadListCounts();
-              // Update lead list cards to reflect any visibility changes (prevent auto-selection during refresh)
+            // Update lead list cards to reflect any visibility changes and updated counts
             this.displayLeadListCards(true);
               // Check if currently selected list is still visible to current user
             if (this.selectedListId) {
@@ -390,9 +389,11 @@ class LeadsManager {    constructor(apiManager) {
                 row.style.backgroundColor = '#f8f9fa';
                 // Remove opacity reduction to make it more clickable                // Add event listener to open lead notes modal for owned leads
                 const ownedRowClickHandler = (e) => {
-                    // Don't trigger if the click was on a dropdown or its elements
+                    // Don't trigger if the click was on a dropdown, phone link, or their elements
                     if (e.target.classList.contains('lead-status-dropdown') || 
-                        e.target.closest('.lead-status-dropdown')) {
+                        e.target.closest('.lead-status-dropdown') ||
+                        e.target.classList.contains('phone-link') ||
+                        e.target.closest('.phone-link')) {
                         return;
                     }
                     this.openLeadNotesModal(lead);
@@ -406,9 +407,11 @@ class LeadsManager {    constructor(apiManager) {
                     handler: ownedRowClickHandler
                 });            } else {                // Unowned lead - clickable to open edit modal
                 const rowClickHandler = (e) => {
-                    // Don't trigger if the click was on a dropdown or its elements
+                    // Don't trigger if the click was on a dropdown, phone link, or their elements
                     if (e.target.classList.contains('lead-status-dropdown') || 
-                        e.target.closest('.lead-status-dropdown')) {
+                        e.target.closest('.lead-status-dropdown') ||
+                        e.target.classList.contains('phone-link') ||
+                        e.target.closest('.phone-link')) {
                         return;
                     }
                     this.openEditLeadModal(lead);
@@ -1826,11 +1829,33 @@ class LeadsManager {    constructor(apiManager) {
     setOptimizedRefresh(enabled) {
         this.useOptimizedRefresh = enabled;
         console.log(`Auto-refresh mode: ${enabled ? 'Optimized (current page only)' : 'Full refresh'}`);
-    }
-
-    // Optimized auto-refresh: only refresh current page data
+    }    // Optimized auto-refresh: only refresh current page data
     async refreshCurrentPageOnly() {
         try {
+            // First, refresh lead lists data to pick up visibility changes and new counts
+            await this.loadLeadLists();
+            await this.updateLeadListCounts();
+            
+            // Update lead list cards to reflect any visibility changes and updated counts
+            // This is crucial for agents to see when admin hides/shows lists
+            this.displayLeadListCards(true);
+            
+            // Check if currently selected list is still visible to current user
+            if (this.selectedListId) {
+                const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);
+                if (!selectedList) {
+                    // Selected list is no longer visible, select first available list
+                    if (this.allLeadLists.length > 0) {
+                        this.selectLeadList(this.allLeadLists[0]._id);
+                    } else {
+                        this.selectedListId = null;
+                        // Clear the leads display if no lists are available
+                        this.displayLeads([]);
+                    }
+                    return; // selectLeadList will handle the display update
+                }
+            }
+            
             // Only proceed if we have a selected list
             if (!this.selectedListId) {
                 return;
@@ -1859,6 +1884,9 @@ class LeadsManager {    constructor(apiManager) {
             if (paginationChanged) {
                 this.updatePaginationInfo();
             }
+            
+            // Update the list filter dropdown to reflect any changes
+            this.populateListFilterDropdown();
             
         } catch (err) {
             console.error('Error during optimized page refresh:', err);

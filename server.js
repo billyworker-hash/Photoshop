@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 
-const { User, Lead, LeadField, LeadList, Customer, Depositor } = require('./models');
+const { User, Lead, LeadField, LeadList, Customer, Depositor, TimeEntry } = require('./models');
 
 dotenv.config();
 const app = express();
@@ -68,6 +68,16 @@ function authenticate(req, res, next) {
     } catch (err) {
         return res.status(401).json({ message: 'Invalid or expired token' });
     }
+}
+
+// Role-based access control middleware
+function requireRole(role) {
+    return (req, res, next) => {
+        if (req.user.role !== role) {
+            return res.status(403).json({ message: `${role} access required` });
+        }
+        next();
+    };
 }
 
 // Auth Routes
@@ -2010,6 +2020,267 @@ app.get('/login', (req, res) => {
 
 app.get('/app', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/clock', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'clock.html'));
+});
+
+// Clock System API Routes
+// Get today's clock status for the current user
+app.get('/api/clock/today', authenticate, async (req, res) => {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        let entry = await TimeEntry.findOne({
+            agent: req.user.id,
+            date: {
+                $gte: today,
+                $lt: tomorrow
+            }
+        });
+        
+        res.json({ entry });
+    } catch (error) {
+        console.error('Get today status error:', error);
+        res.status(500).json({ message: 'Failed to get today status' });
+    }
+});
+
+// Clock in
+app.post('/api/clock/in', authenticate, async (req, res) => {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        // Check if already clocked in today
+        let entry = await TimeEntry.findOne({
+            agent: req.user.id,
+            date: {
+                $gte: today,
+                $lt: tomorrow
+            }
+        });
+        
+        if (entry && entry.status === 'clocked-in') {
+            return res.status(400).json({ message: 'Already clocked in today' });
+        }
+        
+        const now = new Date();
+        
+        // Get user's current hourly rate (we'll store a default rate with user)
+        const user = await User.findById(req.user.id);
+        const defaultRate = user.hourlyRate || 0;
+        
+        if (entry) {
+            // Update existing entry
+            entry.clockIn = now;
+            entry.clockOut = null;
+            entry.status = 'clocked-in';
+            entry.hourlyRate = defaultRate;
+            entry.totalHours = 0;
+            entry.totalPay = 0;
+        } else {
+            // Create new entry
+            entry = new TimeEntry({
+                agent: req.user.id,
+                date: today,
+                clockIn: now,
+                status: 'clocked-in',
+                hourlyRate: defaultRate
+            });
+        }
+        
+        await entry.save();
+        res.json({ message: 'Clocked in successfully', entry });
+    } catch (error) {
+        console.error('Clock in error:', error);
+        res.status(500).json({ message: 'Failed to clock in' });
+    }
+});
+
+// Clock out
+app.post('/api/clock/out', authenticate, async (req, res) => {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        const entry = await TimeEntry.findOne({
+            agent: req.user.id,
+            date: {
+                $gte: today,
+                $lt: tomorrow
+            },
+            status: 'clocked-in'
+        });
+        
+        if (!entry) {
+            return res.status(400).json({ message: 'Not currently clocked in' });
+        }
+        
+        entry.clockOut = new Date();
+        entry.status = 'clocked-out';
+        
+        // Calculate hours and pay (done by pre-save middleware)
+        await entry.save();
+        
+        res.json({ message: 'Clocked out successfully', entry });
+    } catch (error) {
+        console.error('Clock out error:', error);
+        res.status(500).json({ message: 'Failed to clock out' });
+    }
+});
+
+// Get time entries for current user
+app.get('/api/clock/entries', authenticate, async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 30;
+        const entries = await TimeEntry.find({ agent: req.user.id })
+            .sort({ date: -1 })
+            .limit(limit)
+            .populate('agent', 'name');
+            
+        res.json({ entries });
+    } catch (error) {
+        console.error('Get entries error:', error);
+        res.status(500).json({ message: 'Failed to get entries' });
+    }
+});
+
+// Admin only routes
+// Update hourly rate for an agent
+app.post('/api/clock/rate', authenticate, requireRole('admin'), async (req, res) => {
+    try {
+        const { agentId, hourlyRate } = req.body;
+        
+        if (!agentId || hourlyRate === undefined) {
+            return res.status(400).json({ message: 'Agent ID and hourly rate are required' });
+        }
+        
+        // Update user's default hourly rate
+        await User.findByIdAndUpdate(agentId, { hourlyRate: hourlyRate });
+        
+        // Update today's entry if exists and not clocked out
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        await TimeEntry.updateOne(
+            {
+                agent: agentId,
+                date: { $gte: today, $lt: tomorrow }
+            },
+            { hourlyRate: hourlyRate }
+        );
+        
+        res.json({ message: 'Hourly rate updated successfully' });
+    } catch (error) {
+        console.error('Update rate error:', error);
+        res.status(500).json({ message: 'Failed to update hourly rate' });
+    }
+});
+
+// Add manual time entry (admin only)
+app.post('/api/clock/manual', authenticate, requireRole('admin'), async (req, res) => {
+    try {
+        const { agentId, date, clockIn, clockOut, hourlyRate, notes } = req.body;
+        
+        if (!agentId || !date || !clockIn || !clockOut || hourlyRate === undefined) {
+            return res.status(400).json({ message: 'All fields are required' });
+        }
+        
+        const entryDate = new Date(date);
+        entryDate.setHours(0, 0, 0, 0);
+        
+        const tomorrow = new Date(entryDate);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        // Check if entry already exists for this date
+        const existingEntry = await TimeEntry.findOne({
+            agent: agentId,
+            date: { $gte: entryDate, $lt: tomorrow }
+        });
+        
+        if (existingEntry) {
+            return res.status(400).json({ message: 'Entry already exists for this date' });
+        }
+        
+        // Create date objects for clock in/out times
+        const clockInTime = new Date(date + 'T' + clockIn);
+        const clockOutTime = new Date(date + 'T' + clockOut);
+        
+        if (clockOutTime <= clockInTime) {
+            return res.status(400).json({ message: 'Clock out time must be after clock in time' });
+        }
+        
+        const entry = new TimeEntry({
+            agent: agentId,
+            date: entryDate,
+            clockIn: clockInTime,
+            clockOut: clockOutTime,
+            hourlyRate: hourlyRate,
+            status: 'manual',
+            isManualEntry: true,
+            notes: notes || '',
+            createdBy: req.user.id
+        });
+        
+        await entry.save();
+        res.json({ message: 'Manual entry added successfully', entry });
+    } catch (error) {
+        console.error('Add manual entry error:', error);
+        res.status(500).json({ message: 'Failed to add manual entry' });
+    }
+});
+
+// Get calendar data for a specific month
+app.get('/api/clock/calendar', authenticate, async (req, res) => {
+    try {
+        const { year, month, agentId } = req.query;
+        
+        if (!year || !month) {
+            return res.status(400).json({ message: 'Year and month are required' });
+        }
+        
+        // Create date range for the month
+        const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+        const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
+        
+        // Build query
+        let query = {
+            date: { $gte: startDate, $lte: endDate }
+        };
+        
+        // Add agent filter
+        if (agentId) {
+            query.agent = agentId;
+        } else if (req.user.role === 'agent') {
+            // Regular agents only see their own data
+            query.agent = req.user.id;
+        }
+        // Admins without agentId filter see all entries
+        
+        const entries = await TimeEntry.find(query)
+            .populate('agent', 'name')
+            .sort({ date: 1 });
+            
+        res.json({ entries });
+    } catch (error) {
+        console.error('Get calendar data error:', error);
+        res.status(500).json({ message: 'Failed to get calendar data' });
+    }
 });
 
 // Catch all other routes and serve appropriate page

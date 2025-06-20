@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
     passwordHash: String,
     role: { type: String, enum: ['admin', 'agent'], default: 'agent' },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+    hourlyRate: { type: Number, default: 0 }, // Hourly rate in ILS
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -147,6 +148,34 @@ const depositorSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+// Time Entry Schema - For agent clocking system
+const timeEntrySchema = new mongoose.Schema({
+    agent: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    date: { type: Date, required: true },
+    clockIn: { type: Date },
+    clockOut: { type: Date },
+    totalHours: { type: Number, default: 0 },
+    hourlyRate: { type: Number, default: 0 }, // Rate in ILS
+    totalPay: { type: Number, default: 0 }, // Total pay in ILS
+    status: { type: String, enum: ['clocked-in', 'clocked-out', 'manual'], default: 'clocked-out' },
+    isManualEntry: { type: Boolean, default: false },
+    notes: { type: String, default: '' },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // For manual entries by admin
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
+});
+
+// Pre-save middleware to calculate total hours and pay
+timeEntrySchema.pre('save', function(next) {
+    if (this.clockIn && this.clockOut) {
+        const hours = (this.clockOut - this.clockIn) / (1000 * 60 * 60); // Convert ms to hours
+        this.totalHours = Math.round(hours * 100) / 100; // Round to 2 decimal places
+        this.totalPay = Math.round(this.totalHours * this.hourlyRate * 100) / 100; // Round to 2 decimal places
+    }
+    this.updatedAt = new Date();
+    next();
+});
+
 // Create and export models
 const User = mongoose.model('User', userSchema);
 const Lead = mongoose.model('Lead', leadSchema);
@@ -154,6 +183,7 @@ const LeadField = mongoose.model('LeadField', leadFieldSchema);
 const LeadList = mongoose.model('LeadList', leadListSchema);
 const Customer = mongoose.model('Customer', customerSchema);
 const Depositor = mongoose.model('Depositor', depositorSchema);
+const TimeEntry = mongoose.model('TimeEntry', timeEntrySchema);
 
 module.exports = {
     User,
@@ -161,5 +191,6 @@ module.exports = {
     LeadField,
     LeadList,
     Customer,
-    Depositor
+    Depositor,
+    TimeEntry
 };
