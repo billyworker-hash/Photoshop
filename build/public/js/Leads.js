@@ -1328,8 +1328,7 @@ class LeadsManager {    constructor(apiManager) {
             if (modal) modal.hide();
             
             // Reload leads to reflect the changes
-            await this.loadLeads();
-            
+            await this.refreshCurrentView();
             // Show success message
             this.apiManager.showAlert('Lead successfully owned and customer record created', 'success');
             

@@ -54,7 +54,7 @@ const leadListSchema = new mongoose.Schema({
 });
 
 // Add custom validation for createdBy field
-leadListSchema.pre('save', function(next) {
+leadListSchema.pre('save', function (next) {
     if (!this.isSystem && !this.createdBy) {
         return next(new Error('createdBy is required for non-system lists'));
     }
@@ -62,14 +62,15 @@ leadListSchema.pre('save', function(next) {
 });
 
 // Lead Schema
-const leadSchema = new mongoose.Schema({    status: {
+const leadSchema = new mongoose.Schema({
+    status: {
         type: String,
         enum: ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'],
         default: 'new'
     },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     customFields: { type: Map, of: mongoose.Schema.Types.Mixed }, // Dynamic fields storage
-    leadList: { type: mongoose.Schema.Types.ObjectId, ref: 'LeadList' }, // Reference to the list
+    leadList: { type: mongoose.Schema.Types.ObjectId, ref: 'LeadList' },
     notes: [{
         content: String,
         createdAt: { type: Date, default: Date.now },
@@ -84,7 +85,7 @@ const customerSchema = new mongoose.Schema({
     email: String,
     phone: String,
     country: String,
-    language: String,    status: {
+    language: String, status: {
         type: String,
         enum: ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'],
         default: 'new'
@@ -109,7 +110,7 @@ const customerSchema = new mongoose.Schema({
         content: String,
         createdAt: { type: Date, default: Date.now },
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
-    }],    createdAt: { type: Date, default: Date.now }
+    }], createdAt: { type: Date, default: Date.now }
 });
 
 // Depositor Schema - For customers that have been moved to depositors
@@ -118,7 +119,7 @@ const depositorSchema = new mongoose.Schema({
     email: String,
     phone: String,
     country: String,
-    language: String,    status: {
+    language: String, status: {
         type: String,
         enum: ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'],
         default: 'deposited'
@@ -166,7 +167,7 @@ const timeEntrySchema = new mongoose.Schema({
 });
 
 // Pre-save middleware to calculate total hours and pay
-timeEntrySchema.pre('save', function(next) {
+timeEntrySchema.pre('save', function (next) {
     if (this.clockIn && this.clockOut) {
         const hours = (this.clockOut - this.clockIn) / (1000 * 60 * 60); // Convert ms to hours
         this.totalHours = Math.round(hours * 100) / 100; // Round to 2 decimal places
@@ -175,6 +176,13 @@ timeEntrySchema.pre('save', function(next) {
     this.updatedAt = new Date();
     next();
 });
+
+// Add indexes for performance
+leadSchema.index({ leadList: 1, status: 1, assignedTo: 1, createdAt: -1 });
+leadSchema.index({ 'customFields.fullName': 'text', 'customFields.email': 'text', 'customFields.phone': 'text' });
+
+customerSchema.index({ originalLead: 1 });
+depositorSchema.index({ originalLead: 1 });
 
 // Create and export models
 const User = mongoose.model('User', userSchema);

@@ -82,6 +82,9 @@ async function initializeManagers() {
     if (!window.fieldsManager) {
         window.fieldsManager = new FieldsModule();
     }
+    if (!window.calendarManager) {
+        window.calendarManager = new CalendarManager(window.apiManager);
+    }
     
     // Initialize upload manager (async)
     await window.uploadManager.init();
@@ -186,7 +189,7 @@ function toggleAdminFeatures(isAdmin) {
 }
 
 // Show a specific page and load its data
-function showPage(pageName) {
+async function showPage(pageName) {
     // Destroy existing charts before switching pages to prevent memory leaks
     if (window.dashboard) {
         window.dashboard.destroyCharts();
@@ -206,7 +209,7 @@ function showPage(pageName) {
         targetPage.style.display = 'block';
     } else {
         console.error(`Page not found: ${pageName}-page`);
-    }// Update navigation active state
+    }// Update navigation active status
     document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
     const activeNavLink = document.querySelector(`.sidebar .nav-link[data-page="${pageName}"]`);
     if (activeNavLink) {
@@ -257,6 +260,18 @@ function showPage(pageName) {
             break;
         case 'upload':
             // Upload page doesn't need special loading
+            break;
+        case 'calendar':
+            // Show the calendar page and let CalendarManager populate its content
+            const calendarPage = document.getElementById('calendar-page');
+            if (calendarPage) {
+                calendarPage.style.display = 'block';
+                if (window.calendarManager) {
+                    await window.calendarManager.loadCalendar();
+                }
+            } else {
+                console.error('Calendar page container not found');
+            }
             break;
     }
 }
@@ -624,3 +639,71 @@ function resetModalButtons() {
 // Expose the function globally for use by other modules
 window.resetModalButtons = resetModalButtons;
 window.deactivateAllUsers = deactivateAllUsers;
+
+// Remove Calendar tab injection from JS
+
+// Add Calendar page container if not present
+if (!document.getElementById('calendar-page')) {
+    const appContent = document.getElementById('app-content');
+    if (appContent) {
+        const calendarPage = document.createElement('div');
+        calendarPage.id = 'calendar-page';
+        calendarPage.className = 'page-content d-none';
+        calendarPage.innerHTML = `
+            <div class="container py-4">
+                <h2><i class="bi bi-calendar"></i> Appointments Calendar</h2>
+                <div id="simple-calendar"></div>
+            </div>
+        `;
+        appContent.appendChild(calendarPage);
+    }
+}
+
+// Render a simple calendar (month view) and show appointments
+function renderSimpleCalendar(appointments) {
+    const calendarEl = document.getElementById('simple-calendar');
+    if (!calendarEl) return;
+    // Get current month/year
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    // Build calendar grid
+    let html = '<table class="table table-bordered"><thead><tr>';
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    for (let d of days) html += `<th>${d}</th>`;
+    html += '</tr></thead><tbody><tr>';
+    let dayOfWeek = firstDay.getDay();
+    for (let i = 0; i < dayOfWeek; i++) html += '<td></td>';
+    for (let date = 1; date <= daysInMonth; date++) {
+        if ((dayOfWeek % 7) === 0 && date !== 1) html += '</tr><tr>';
+        html += `<td><div><strong>${date}</strong></div>`;
+        // Show appointments for this day
+        const appts = appointments.filter(a => {
+            const apptDate = new Date(a.date);
+            return apptDate.getFullYear() === year && apptDate.getMonth() === month && apptDate.getDate() === date;
+        });
+        for (let a of appts) {
+            html += `<div class="badge bg-info text-dark my-1 w-100" title="${a.module}">${a.title}</div>`;
+        }
+        html += '</td>';
+        dayOfWeek++;
+    }
+    while ((dayOfWeek % 7) !== 0) { html += '<td></td>'; dayOfWeek++; }
+    html += '</tr></tbody></table>';
+    calendarEl.innerHTML = html;
+}
+
+// Load appointments from Leads and other modules
+async function loadAppointments() {
+    let appointments = [];
+    // Example: Load from Leads
+    if (window.leadsManager && window.leadsManager.getAppointments) {
+        const leadAppointments = await window.leadsManager.getAppointments();
+        appointments = appointments.concat(leadAppointments.map(a => ({ ...a, module: 'Lead' })));
+    }
+    // Add more modules here as needed
+    return appointments;
+}

@@ -7,474 +7,172 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="css/style.css">
-    <style>
-        /* Modern Login Styles */
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-        }
-        
-        .login-container {
-            backdrop-filter: blur(10px);
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
-        }
-        
-        .login-card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 16px;
-            border: none;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            backdrop-filter: blur(20px);
-        }
-        
-        .login-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        
-        .form-control {
-            border: 2px solid #e9ecef;
-            border-radius: 12px;
-            padding: 12px 16px;
-            font-size: 16px;
-            transition: all 0.3s ease;
-            background: rgba(255, 255, 255, 0.9);
-        }
-        
-        .form-control:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
-            background: rgba(255, 255, 255, 1);
-        }
-        
-        .input-group-text {
-            border: 2px solid #e9ecef;
-            border-right: none;
-            border-radius: 12px 0 0 12px;
-            background: rgba(255, 255, 255, 0.9);
-            color: #667eea;
-        }
-        
-        .input-group .form-control {
-            border-left: none;
-            border-radius: 0 12px 12px 0;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            border-radius: 12px;
-            padding: 14px 24px;
-            font-weight: 600;
-            font-size: 16px;
-            transition: all 0.3s ease;
-            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 24px rgba(102, 126, 234, 0.4);
-        }
-        
-        .btn-outline-secondary {
-            border: 2px solid #e9ecef;
-            color: #667eea;
-            border-radius: 12px;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-outline-secondary:hover {
-            background: #667eea;
-            border-color: #667eea;
-            color: white;
-            transform: translateY(-1px);
-        }
-        
-        .logo-icon {
-            font-size: 3.5rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 1rem;
-        }
-        
-        .floating-shapes {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: -1;
-        }
-        
-        .shape {
-            position: absolute;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.1);
-            animation: float 6s ease-in-out infinite;
-        }
-        
-        .shape:nth-child(1) {
-            width: 80px;
-            height: 80px;
-            top: 20%;
-            left: 10%;
-            animation-delay: 0s;
-        }
-        
-        .shape:nth-child(2) {
-            width: 120px;
-            height: 120px;
-            top: 60%;
-            right: 15%;
-            animation-delay: 2s;
-        }
-        
-        .shape:nth-child(3) {
-            width: 60px;
-            height: 60px;
-            bottom: 20%;
-            left: 20%;
-            animation-delay: 4s;
-        }
-        
-        @keyframes float {
-            0%, 100% { transform: translateY(0px) rotate(0deg); }
-            50% { transform: translateY(-20px) rotate(180deg); }
-        }
-        
-        .form-label {
-            font-weight: 600;
-            color: #495057;
-            margin-bottom: 8px;
-        }
-        
-        .footer-text {
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 14px;
-        }
-    </style>
 </head>
-<body>
-    <!-- Floating background shapes -->
-    <div class="floating-shapes">
-        <div class="shape"></div>
-        <div class="shape"></div>
-        <div class="shape"></div>
-    </div>
-
-    <div class="container-fluid vh-100 d-flex align-items-center justify-content-center p-4">
-        <div class="row w-100">
-            <div class="col-md-6 col-lg-4 col-xl-3 mx-auto">
-                <div class="login-container p-4">
-                    <div class="login-card shadow-lg">
-                        <div class="card-body p-5">
-                            <!-- Logo/Header -->
-                            <div class="text-center mb-5">
-                                <div class="logo-icon">
-                                    <i class="bi bi-shield-check"></i>
+<body class="bg-primary bg-gradient min-vh-100 d-flex align-items-center justify-content-center">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-4">
+                <div class="card shadow-lg border-0 rounded-4">
+                    <div class="card-body p-5">
+                        <div class="text-center mb-4">
+                            <i class="bi bi-shield-check display-3 text-primary mb-3"></i>
+                            <h1 class="fw-bold mb-2">CRM System</h1>
+                            <p class="text-muted mb-0">Welcome back! Please sign in to continue.</p>
+                        </div>
+                        <div id="alert-container" class="mb-4"></div>
+                        <form id="login-form" class="needs-validation" novalidate>
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email address</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                                    <input type="email" class="form-control" id="email" placeholder="Enter your email address" required>
+                                    <div class="invalid-feedback">Please provide a valid email address.</div>
                                 </div>
-                                <h1 class="login-header fw-bold mb-2">CRM System</h1>
-                                <p class="text-muted mb-0">Welcome back! Please sign in to continue.</p>
                             </div>
-
-                            <!-- Alert for errors -->
-                            <div id="alert-container" class="mb-4"></div>
-
-                            <!-- Login Form -->
-                            <form id="login-form" class="needs-validation" novalidate>
-                                <div class="mb-4">
-                                    <label for="email" class="form-label">
-                                        <i class="bi bi-envelope me-2"></i>Email Address
-                                    </label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">
-                                            <i class="bi bi-envelope"></i>
-                                        </span>
-                                        <input type="email" class="form-control" id="email" 
-                                               placeholder="Enter your email address" required>
-                                        <div class="invalid-feedback">
-                                            Please provide a valid email address.
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="mb-4">
-                                    <label for="password" class="form-label">
-                                        <i class="bi bi-lock me-2"></i>Password
-                                    </label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">
-                                            <i class="bi bi-lock"></i>
-                                        </span>
-                                        <input type="password" class="form-control" id="password" 
-                                               placeholder="Enter your password" required>
-                                        <button class="btn btn-outline-secondary" type="button" id="toggle-password">
-                                            <i class="bi bi-eye"></i>
-                                        </button>
-                                        <div class="invalid-feedback">
-                                            Please provide your password.
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="mb-4">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="remember-me">
-                                        <label class="form-check-label text-muted" for="remember-me">
-                                            Remember me for 30 days
-                                        </label>
-                                    </div>
-                                </div>
-
-                                <div class="d-grid mb-4">
-                                    <button type="submit" class="btn btn-primary btn-lg" id="login-btn">
-                                        <span class="login-text">
-                                            <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
-                                        </span>
-                                        <span class="login-spinner d-none">
-                                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                                            Signing in...
-                                        </span>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Password</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                                    <input type="password" class="form-control" id="password" placeholder="Enter your password" required>
+                                    <button class="btn btn-outline-secondary" type="button" id="toggle-password" tabindex="-1">
+                                        <i class="bi bi-eye"></i>
                                     </button>
+                                    <div class="invalid-feedback">Please provide your password.</div>
                                 </div>
-                            </form>
-
-                            <!-- Additional Links -->
-                            <div class="text-center">
-                                <small class="text-muted">
-                                    Need help? <a href="#" class="text-decoration-none">Contact Support</a>
-                                </small>
                             </div>
+                            <div class="mb-3 form-check">
+                                <input class="form-check-input" type="checkbox" id="remember-me">
+                                <label class="form-check-label text-muted" for="remember-me">Remember me for 30 days</label>
+                            </div>
+                            <div class="d-grid mb-3">
+                                <button type="submit" class="btn btn-primary btn-lg" id="login-btn">
+                                    <span class="login-text">
+                                        <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+                                    </span>
+                                    <span class="login-spinner d-none">
+                                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        Signing in...
+                                    </span>
+                                </button>
+                            </div>
+                        </form>
+                        <div class="text-center">
+                            <small class="text-muted">
+                                Need help? <a href="#" class="text-decoration-none">Contact Support</a>
+                            </small>
                         </div>
                     </div>
                 </div>
-
-                <!-- Footer -->
                 <div class="text-center mt-4">
-                    <small class="footer-text">
+                    <small class="text-white-50">
                         <i class="bi bi-shield-lock me-1"></i>
                         &copy; 2025 CRM System. All rights reserved.
                     </small>
                 </div>
             </div>
         </div>
-    </div>    <!-- Bootstrap JS -->
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Login JavaScript -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const API_URL = '/api';
-            
-            // Check if user is already logged in
             const token = localStorage.getItem('token');
             if (token) {
-                // Redirect to main app
                 window.location.href = '/app';
                 return;
             }
-
-            // Form elements
             const loginForm = document.getElementById('login-form');
             const emailInput = document.getElementById('email');
             const passwordInput = document.getElementById('password');
             const loginBtn = document.getElementById('login-btn');
             const togglePassword = document.getElementById('toggle-password');
             const alertContainer = document.getElementById('alert-container');
-
-            // Add modern input animations
-            [emailInput, passwordInput].forEach(input => {
-                input.addEventListener('focus', function() {
-                    this.parentElement.style.transform = 'scale(1.02)';
-                });
-                
-                input.addEventListener('blur', function() {
-                    this.parentElement.style.transform = 'scale(1)';
-                });
-            });
-
-            // Toggle password visibility with animation
             togglePassword.addEventListener('click', function() {
                 const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
                 passwordInput.setAttribute('type', type);
                 const icon = this.querySelector('i');
-                
-                // Smooth icon transition
-                icon.style.transform = 'scale(0.8)';
-                setTimeout(() => {
-                    icon.classList.toggle('bi-eye');
-                    icon.classList.toggle('bi-eye-slash');
-                    icon.style.transform = 'scale(1)';
-                }, 150);
+                icon.classList.toggle('bi-eye');
+                icon.classList.toggle('bi-eye-slash');
             });
-
-            // Handle login form submission with validation
             loginForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                
-                // Add Bootstrap validation classes
                 loginForm.classList.add('was-validated');
-                
                 const email = emailInput.value.trim();
                 const password = passwordInput.value;
-
-                // Basic validation
                 if (!email || !password) {
                     showAlert('Please enter both email and password.', 'danger');
                     return;
                 }
-
                 if (!isValidEmail(email)) {
                     showAlert('Please enter a valid email address.', 'danger');
                     return;
                 }
-
-                // Show loading state
                 setLoadingState(true);
                 clearAlert();
-
                 try {
                     const response = await fetch(`${API_URL}/login`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ email, password })
                     });
-
                     const data = await response.json();
-
                     if (response.ok) {
-                        // Save token and user data
                         localStorage.setItem('token', data.token);
                         localStorage.setItem('user', JSON.stringify(data.user));
-                        
                         showAlert('Login successful! Redirecting...', 'success');
-                        
-                        // Add success animation
-                        loginBtn.style.transform = 'scale(0.95)';
-                        setTimeout(() => {
-                            loginBtn.style.transform = 'scale(1)';
-                        }, 200);
-                        
-                        // Redirect to main app after short delay
-                        setTimeout(() => {
-                            window.location.href = '/app';
-                        }, 1500);
+                        setTimeout(() => { window.location.href = '/app'; }, 1500);
                     } else {
                         showAlert(data.message || 'Invalid email or password. Please try again.', 'danger');
-                        // Shake animation on error
-                        loginForm.style.animation = 'shake 0.5s ease-in-out';
-                        setTimeout(() => {
-                            loginForm.style.animation = '';
-                        }, 500);
                     }
                 } catch (error) {
-                    console.error('Login error:', error);
                     showAlert('Connection error. Please check your internet connection and try again.', 'danger');
                 } finally {
                     setLoadingState(false);
                 }
             });
-
-            // Email validation helper
             function isValidEmail(email) {
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 return emailRegex.test(email);
             }
-
-            // Enhanced alert function with animations
             function showAlert(message, type) {
-                const icon = type === 'success' ? 'bi-check-circle-fill' : 
+                const icon = type === 'success' ? 'bi-check-circle-fill' :
                            type === 'danger' ? 'bi-exclamation-triangle-fill' : 'bi-info-circle-fill';
-                
                 const alertHtml = `
-                    <div class="alert alert-${type} alert-dismissible fade show" role="alert" style="border-radius: 12px; border: none; animation: slideDown 0.3s ease-out;">
+                    <div class="alert alert-${type} alert-dismissible fade show" role="alert">
                         <i class="bi ${icon} me-2"></i>
                         ${message}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
                 `;
                 alertContainer.innerHTML = alertHtml;
-                
-                // Auto-dismiss success alerts
                 if (type === 'success') {
                     setTimeout(() => {
                         const alert = alertContainer.querySelector('.alert');
                         if (alert) {
-                            alert.style.animation = 'slideUp 0.3s ease-out forwards';
+                            alert.classList.remove('show');
                             setTimeout(() => clearAlert(), 300);
                         }
                     }, 3000);
                 }
             }
-
-            // Helper function to clear alerts
             function clearAlert() {
                 alertContainer.innerHTML = '';
             }
-
-            // Enhanced loading state with better animations
             function setLoadingState(loading) {
                 const loginText = loginBtn.querySelector('.login-text');
                 const loginSpinner = loginBtn.querySelector('.login-spinner');
-                
                 if (loading) {
                     loginBtn.disabled = true;
-                    loginBtn.style.transform = 'scale(0.98)';
                     loginText.classList.add('d-none');
                     loginSpinner.classList.remove('d-none');
                 } else {
                     loginBtn.disabled = false;
-                    loginBtn.style.transform = 'scale(1)';
                     loginText.classList.remove('d-none');
                     loginSpinner.classList.add('d-none');
                 }
             }
-
-            // Focus on email input with delay for smooth animation
-            setTimeout(() => {
-                emailInput.focus();
-            }, 500);
-
-            // Add CSS animations dynamically
-            const style = document.createElement('style');
-            style.textContent = `
-                @keyframes slideDown {
-                    from { opacity: 0; transform: translateY(-20px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                
-                @keyframes slideUp {
-                    from { opacity: 1; transform: translateY(0); }
-                    to { opacity: 0; transform: translateY(-20px); }
-                }
-                
-                @keyframes shake {
-                    0%, 100% { transform: translateX(0); }
-                    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-                    20%, 40%, 60%, 80% { transform: translateX(5px); }
-                }
-                
-                .input-group {
-                    transition: transform 0.2s ease;
-                }
-                
-                .btn-primary {
-                    transition: all 0.2s ease;
-                }
-            `;
-            document.head.appendChild(style);
+            setTimeout(() => { emailInput.focus(); }, 500);
         });
     </script>
 </body>
