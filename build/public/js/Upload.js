@@ -561,37 +561,55 @@ class UploadManager {
 
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }// Create Bulk Add Modal
-    createBulkAddModal() {
-        if (document.getElementById('bulkAddModal')) return;
+createBulkAddModal() {
+    if (document.getElementById('bulkAddModal')) return;
 
-        const modalHtml = `
-            <div class="modal fade" id="bulkAddModal" tabindex="-1">
-                <div class="modal-dialog modal-xl">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Bulk Add Leads to List</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <form id="bulkAddForm" onsubmit="event.preventDefault(); window.uploadManager.handleBulkAdd(event);">
-                            <div class="modal-body">
-                                <div id="bulk-add-form-container">
-                                    <!-- Form will be generated dynamically -->
-                                </div>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="bi bi-upload me-2"></i>Create Leads
-                                </button>
-                            </div>
-                        </form>
+    const modalHtml = `
+        <div class="modal fade" id="bulkAddModal" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-centered" style="max-width: 100vw;">
+                <div class="modal-content" style="width: 100%; max-width: 700px; margin: auto;">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Bulk Add Leads to List</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
+                    <form id="bulkAddForm" onsubmit="event.preventDefault(); window.uploadManager.handleBulkAdd(event);">
+                        <div class="modal-body">
+                            <div id="bulk-add-form-container">
+                                <!-- Form will be generated dynamically -->
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-upload me-2"></i>Create Leads
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
-        `;
+        </div>
+        <style>
+            @media (max-width: 768px) {
+                #bulkAddModal .modal-dialog {
+                    max-width: 100vw !important;
+                    margin: 0;
+                }
+                #bulkAddModal .modal-content {
+                    border-radius: 0.5rem;
+                    max-width: 98vw;
+                    width: 100vw;
+                }
+            }
+            #bulkAddModal .modal-content {
+                width: 100%;
+                max-width: 700px;
+                margin: auto;
+            }
+        </style>
+    `;
 
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-    }
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
 
     // Add custom label field to create form
     addCustomLabel() {
