@@ -1,48 +1,51 @@
 // Leads.js - Handles lead management functionality
-class LeadsManager {    constructor(apiManager) {
+class LeadsManager {
+    constructor(apiManager) {
         this.apiManager = apiManager;
         this.allLeadLists = [];
         this.selectedListId = null;
         this.eventListeners = []; // Track event listeners for cleanup
         this.filterListenersSetup = false; // Track if filter listeners are already set up
-          // Auto-refresh properties
+        // Auto-refresh properties
         this.autoRefreshInterval = null;
         this.autoRefreshEnabled = false;
         this.refreshIntervalMs = 10000; // 10 seconds
         this.isLeadsPageActive = false;
         this.useOptimizedRefresh = true; // Use optimized refresh by default
-          // Pagination properties - now for server-side pagination
+        // Pagination properties - now for server-side pagination
         this.currentPage = 1;
         this.leadsPerPage = 10; // Default batch size
         this.totalPages = 1;
         this.totalCount = 0;
         this.currentLeads = []; // Current page leads from server
         this.currentFilters = {}; // Track current search/status filters
+        // Sorting
+        constructor
     }    // Load leads
     async loadLeads() {
         try {
             // Load custom fields first
             await this.loadCustomFields();
-            
+
             // Load lead lists for cards display
             await this.loadLeadLists();
-            
+
             // Update lead list counts
             await this.updateLeadListCounts();
-            
+
             // Display lead list cards (this will auto-select first list if available)
             // The auto-selection will trigger fetchLeads() and displayLeads() automatically
             this.displayLeadListCards();
-            
+
             // Initialize custom fields in forms
             this.initializeCustomFields();
-            
+
             // Load agents for the lead assignment dropdown
             const currentUser = this.apiManager.getCurrentUser();
             if (currentUser && currentUser.role === 'admin') {
                 this.loadAgentsForDropdown();
             }
-            
+
             // Set up search and filter event listeners only once
             if (!this.filterListenersSetup) {
                 this.setupLeadFilters();
@@ -56,14 +59,33 @@ class LeadsManager {    constructor(apiManager) {
             console.error('Error loading leads:', err);
         }
     }    // Update lead counts for each list (efficient single API call)
+
+    // 2. Add this sorting function to your class:
+    sortLeads() {
+        if (!this.sortField) return;
+        this.currentLeads.sort((a, b) => {
+            let aValue = a.customFields?.[this.sortField] ?? '';
+            let bValue = b.customFields?.[this.sortField] ?? '';
+            // Fallback for main fields
+            if (aValue === '' && a[this.sortField] !== undefined) aValue = a[this.sortField];
+            if (bValue === '' && b[this.sortField] !== undefined) bValue = b[this.sortField];
+            // Compare as strings (case-insensitive)
+            aValue = (aValue ?? '').toString().toLowerCase();
+            bValue = (bValue ?? '').toString().toLowerCase();
+            if (aValue < bValue) return this.sortOrder === 'asc' ? -1 : 1;
+            if (aValue > bValue) return this.sortOrder === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+
     async updateLeadListCounts() {
         try {
-            const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/leads/counts`);            if (response.ok) {
+            const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/leads/counts`); if (response.ok) {
                 const counts = await response.json();
-                
+
                 console.log(`[FRONTEND DEBUG] Received counts:`, counts);
                 console.log(`[FRONTEND DEBUG] Current allLeadLists:`, this.allLeadLists.map(l => ({ id: l._id, name: l.name })));
-                
+
                 // Update each list with its count
                 counts.forEach(countInfo => {
                     console.log(`[FRONTEND DEBUG] Processing count for listId: ${countInfo.listId}, count: ${countInfo.count}`);
@@ -75,7 +97,7 @@ class LeadsManager {    constructor(apiManager) {
                         console.log(`[FRONTEND DEBUG] No matching list found for listId: ${countInfo.listId}`);
                     }
                 });
-                
+
                 console.log(`[FRONTEND] Updated counts for ${counts.length} lead lists in single request`);
             } else {
                 console.error('Failed to fetch lead counts');
@@ -96,10 +118,10 @@ class LeadsManager {    constructor(apiManager) {
         try {
             // Fetch fresh lead lists data to pick up visibility changes
             await this.loadLeadLists();
-            
+
             // Update lead list counts BEFORE displaying cards
             await this.updateLeadListCounts();
-            
+
             // Fetch fresh leads data for current page and filters
             const result = await this.fetchLeads(this.currentPage, this.leadsPerPage, this.currentFilters);
             this.currentLeads = result.leads;
@@ -108,7 +130,7 @@ class LeadsManager {    constructor(apiManager) {
 
             // Update lead list cards to reflect any visibility changes and updated counts
             this.displayLeadListCards(true);
-              // Check if currently selected list is still visible to current user
+            // Check if currently selected list is still visible to current user
             if (this.selectedListId) {
                 const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);
                 if (!selectedList) {
@@ -121,12 +143,12 @@ class LeadsManager {    constructor(apiManager) {
                     return; // selectLeadList will handle the display update
                 }
             }
-            
+
             // Re-display leads with current page            this.displayLeads(this.currentLeads);
-            
+
             // Update the list filter dropdown to reflect any changes
             this.populateListFilterDropdown();
-            
+
         } catch (err) {
             console.error('Error refreshing leads data:', err);
             // Don't show error to user for background refresh failures
@@ -186,10 +208,10 @@ class LeadsManager {    constructor(apiManager) {
         const card = document.createElement('div');
         card.className = `lead-list-card ${isSelected ? 'selected' : ''}`;
         card.dataset.listId = list._id || '';
-        
+
         const currentUser = this.apiManager.getCurrentUser();
         const isAdmin = currentUser && currentUser.role === 'admin';
-          card.innerHTML = `
+        card.innerHTML = `
             <div class="card-header">
                 <h5 class="card-title">${list.name}</h5>
                 <span class="lead-count-badge">${list.leadCount} leads</span>
@@ -207,23 +229,24 @@ class LeadsManager {    constructor(apiManager) {
             }
         };
         card.addEventListener('click', cardClickHandler);
-        
+
         // Track this event listener for cleanup
         this.eventListeners.push({
             element: card,
             event: 'click',
-            handler: cardClickHandler        });
+            handler: cardClickHandler
+        });
 
         return card;
     }    // Select lead list for filtering
     async selectLeadList(listId) {
         this.selectedListId = listId;
-        
+
         // Update card selection visual state
         document.querySelectorAll('.lead-list-card').forEach(card => {
             card.classList.remove('selected');
         });
-        
+
         const selectedCard = document.querySelector(`[data-list-id="${listId || ''}"]`);
         if (selectedCard) {
             selectedCard.classList.add('selected');
@@ -231,7 +254,7 @@ class LeadsManager {    constructor(apiManager) {
 
         // Reset to first page when changing list
         this.currentPage = 1;
-        
+
         // Update current filters to include the new list
         this.currentFilters = {
             ...this.currentFilters,
@@ -240,7 +263,7 @@ class LeadsManager {    constructor(apiManager) {
 
         // Fetch leads for the selected list
         await this.refreshCurrentView();
-        
+
         // Update the list filter dropdown to match
         const listFilter = document.getElementById('lead-list-filter');
         if (listFilter) {
@@ -287,13 +310,13 @@ class LeadsManager {    constructor(apiManager) {
             const response = await this.apiManager.authenticatedFetch(
                 `${this.apiManager.API_URL}/leads?${params.toString()}`
             );
-            
+
             if (!response.ok) {
                 throw new Error('Failed to fetch leads');
             }
-            
+
             const data = await response.json();
-            
+
             // Handle both old format (array) and new format (object with pagination)
             if (Array.isArray(data)) {
                 // Legacy format - return as-is for backward compatibility
@@ -320,7 +343,7 @@ class LeadsManager {    constructor(apiManager) {
                     currentPage: 1,
                     totalPages: 1,
                     totalCount: 0,
-                    limit: limit,                    hasNext: false,
+                    limit: limit, hasNext: false,
                     hasPrev: false
                 }
             };
@@ -329,17 +352,18 @@ class LeadsManager {    constructor(apiManager) {
 
     // Display leads (now works with server-side pagination)
     displayLeads(leads) {
+        this.sortLeads();
         const tableHeader = document.getElementById('leads-table-header');
         const tableBody = document.getElementById('leads-table-body');
         const noLeadsMessage = document.getElementById('no-leads-message');
-        
+
         if (!tableBody) {
             return;
         }
-        
+
         // Clean up existing row event listeners
         this.cleanupRowEventListeners();
-        
+
         // If no list is selected, show message requiring list selection
         if (!this.selectedListId) {
             tableHeader.innerHTML = '';
@@ -356,12 +380,12 @@ class LeadsManager {    constructor(apiManager) {
             this.updatePaginationControls();
             return;
         }
-        
+
         // Generate dynamic table headers
         this.generateTableHeaders(tableHeader);
-        
+
         tableBody.innerHTML = '';
-        
+
         // Show/hide no leads message
         if (leads.length === 0) {
             tableBody.innerHTML = '';
@@ -371,18 +395,18 @@ class LeadsManager {    constructor(apiManager) {
         } else {
             if (noLeadsMessage) noLeadsMessage.style.display = 'none';
         }
-        
+
         // Display leads (these are already the correct page from server)
         leads.forEach(lead => {
             const row = document.createElement('tr');
             row.innerHTML = this.generateLeadRow(lead);
             row.dataset.leadId = lead._id;
-              // Check if lead is owned
+            // Check if lead is owned
             const isOwned = lead.assignedTo && lead.assignedTo._id;
-            
+
             // Make all leads clickable
             row.style.cursor = 'pointer';
-            
+
             if (isOwned) {
                 // Owned lead styling - make it visually distinct but still clickable
                 row.classList.add('owned-lead');
@@ -390,7 +414,7 @@ class LeadsManager {    constructor(apiManager) {
                 // Remove opacity reduction to make it more clickable                // Add event listener to open lead notes modal for owned leads
                 const ownedRowClickHandler = (e) => {
                     // Don't trigger if the click was on a dropdown, phone link, or their elements
-                    if (e.target.classList.contains('lead-status-dropdown') || 
+                    if (e.target.classList.contains('lead-status-dropdown') ||
                         e.target.closest('.lead-status-dropdown') ||
                         e.target.classList.contains('phone-link') ||
                         e.target.closest('.phone-link')) {
@@ -399,16 +423,17 @@ class LeadsManager {    constructor(apiManager) {
                     this.openLeadNotesModal(lead);
                 };
                 row.addEventListener('click', ownedRowClickHandler);
-                
+
                 // Track this event listener for cleanup
                 this.eventListeners.push({
                     element: row,
                     event: 'click',
                     handler: ownedRowClickHandler
-                });            } else {                // Unowned lead - clickable to open edit modal
+                });
+            } else {                // Unowned lead - clickable to open edit modal
                 const rowClickHandler = (e) => {
                     // Don't trigger if the click was on a dropdown, phone link, or their elements
-                    if (e.target.classList.contains('lead-status-dropdown') || 
+                    if (e.target.classList.contains('lead-status-dropdown') ||
                         e.target.closest('.lead-status-dropdown') ||
                         e.target.classList.contains('phone-link') ||
                         e.target.closest('.phone-link')) {
@@ -417,7 +442,7 @@ class LeadsManager {    constructor(apiManager) {
                     this.openEditLeadModal(lead);
                 };
                 row.addEventListener('click', rowClickHandler);
-                
+
                 // Track this event listener for cleanup
                 this.eventListeners.push({
                     element: row,
@@ -425,18 +450,19 @@ class LeadsManager {    constructor(apiManager) {
                     handler: rowClickHandler
                 });
             }
-              tableBody.appendChild(row);        });
-        
+            tableBody.appendChild(row);
+        });
+
         // Add event listeners to phone spans to enable click-to-call
         const phoneLinks = tableBody.querySelectorAll('.phone-link');
         phoneLinks.forEach(span => {
             const phoneLinkHandler = (e) => {
                 e.stopPropagation(); // Prevent the row click event
-                
+
                 // Get the phone number from the data attribute
                 const phoneNumber = span.getAttribute('data-phone');
                 const sipUrl = `sip:${phoneNumber}`;
-                
+
                 // Try to open the SIP URL in a new way that doesn't block the UI
                 try {
                     // Create a temporary iframe to handle the SIP protocol
@@ -444,7 +470,7 @@ class LeadsManager {    constructor(apiManager) {
                     iframe.style.display = 'none';
                     iframe.src = sipUrl;
                     document.body.appendChild(iframe);
-                    
+
                     // Remove the iframe after a short delay
                     setTimeout(() => {
                         document.body.removeChild(iframe);
@@ -455,7 +481,7 @@ class LeadsManager {    constructor(apiManager) {
                 }
             };
             span.addEventListener('click', phoneLinkHandler);
-            
+
             // Track this event listener for cleanup
             this.eventListeners.push({
                 element: span,
@@ -463,15 +489,16 @@ class LeadsManager {    constructor(apiManager) {
                 handler: phoneLinkHandler
             });
         });
-        
+
         // Apply status colors to all dropdowns
         this.applyStatusColors();
-        
+
         // Initialize Bootstrap tooltips
         const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
         tooltips.forEach(tooltip => {
-            new bootstrap.Tooltip(tooltip);        });
-          // Update pagination controls
+            new bootstrap.Tooltip(tooltip);
+        });
+        // Update pagination controls
         this.updatePaginationControls();
     }// Update pagination controls
     updatePaginationControls() {
@@ -481,27 +508,27 @@ class LeadsManager {    constructor(apiManager) {
         const paginationInfoTop = document.getElementById('pagination-info-top');
         const leadsPerPageSelect = document.getElementById('leads-per-page');
         const leadsPerPageSelectTop = document.getElementById('leads-per-page-top');
-        
+
         if (!paginationContainer && !paginationContainerTop) {
             return;
         }
-        
+
         // Update pagination info for both top and bottom
-        const infoText = this.totalCount === 0 
-            ? 'No leads to display' 
+        const infoText = this.totalCount === 0
+            ? 'No leads to display'
             : (() => {
                 const startIndex = (this.currentPage - 1) * this.leadsPerPage + 1;
                 const endIndex = Math.min(this.currentPage * this.leadsPerPage, this.totalCount);
                 return `Showing ${startIndex}-${endIndex} of ${this.totalCount} leads`;
             })();
-            
+
         if (paginationInfo) {
             paginationInfo.textContent = infoText;
         }
         if (paginationInfoTop) {
             paginationInfoTop.textContent = infoText;
         }
-        
+
         // Set up leads per page selectors if not already done
         [leadsPerPageSelect, leadsPerPageSelectTop].forEach(select => {
             if (select && !select.dataset.listenerAdded) {
@@ -509,43 +536,44 @@ class LeadsManager {    constructor(apiManager) {
                 select.addEventListener('change', async (e) => {
                     this.leadsPerPage = parseInt(e.target.value);
                     this.currentPage = 1; // Reset to first page
-                    
+
                     // Sync both selectors
                     [leadsPerPageSelect, leadsPerPageSelectTop].forEach(s => {
                         if (s && s !== e.target) {
                             s.value = e.target.value;
                         }
                     });
-                    
+
                     await this.refreshCurrentView();
                 });
                 select.dataset.listenerAdded = 'true';
             }
         });
-        
+
         // Clear existing pagination for both containers
         [paginationContainer, paginationContainerTop].forEach(container => {
             if (container) {
                 container.innerHTML = '';
-            }        });
+            }
+        });
 
         // Show pagination controls (they might be hidden initially)
         const topPaginationParent = paginationContainerTop?.parentElement;
         if (topPaginationParent) {
             topPaginationParent.style.display = 'flex';
         }
-          
+
         // Always show pagination controls for better UX, even if there's only one page
         // Create pagination
         const pagination = document.createElement('nav');
         pagination.setAttribute('aria-label', 'Leads pagination');
-        
+
         const ul = document.createElement('ul');
         ul.className = 'pagination pagination-sm mb-0';        // Previous button
         const prevLi = document.createElement('li');
         prevLi.className = `page-item ${this.currentPage === 1 || this.totalPages <= 1 ? 'disabled' : ''}`;
         const prevDisabled = this.currentPage === 1 || this.totalPages <= 1;
-        const prevStyle = prevDisabled 
+        const prevStyle = prevDisabled
             ? 'background-color: #6c757d; border-color: #6c757d; color: white; opacity: 0.65;'
             : 'background-color: #28a745; border-color: #28a745; color: white;';
         prevLi.innerHTML = `
@@ -563,18 +591,18 @@ class LeadsManager {    constructor(apiManager) {
         const maxVisiblePages = 5;
         let startPage = Math.max(1, this.currentPage - Math.floor(maxVisiblePages / 2));
         let endPage = Math.min(Math.max(1, this.totalPages), startPage + maxVisiblePages - 1);
-        
+
         // Adjust start page if we're near the end
         if (endPage - startPage < maxVisiblePages - 1) {
             startPage = Math.max(1, endPage - maxVisiblePages + 1);
         }
-        
+
         // Always show at least page 1
         if (this.totalPages === 0) {
             startPage = 1;
             endPage = 1;
         }
-          // First page + ellipsis
+        // First page + ellipsis
         if (startPage > 1) {
             const firstLi = document.createElement('li');
             firstLi.className = 'page-item';
@@ -584,7 +612,7 @@ class LeadsManager {    constructor(apiManager) {
                 await this.goToPage(1);
             });
             ul.appendChild(firstLi);
-            
+
             if (startPage > 2) {
                 const ellipsisLi = document.createElement('li');
                 ellipsisLi.className = 'page-item disabled';
@@ -596,11 +624,11 @@ class LeadsManager {    constructor(apiManager) {
             const li = document.createElement('li');
             li.className = `page-item ${i === this.currentPage ? 'active' : ''}`;
             const isActive = i === this.currentPage;
-            const greenStyle = isActive 
+            const greenStyle = isActive
                 ? 'background-color: #198754; border-color: #198754; color: white;'
                 : 'background-color: #28a745; border-color: #28a745; color: white;';
             li.innerHTML = `<a class="page-link" href="#" style="${greenStyle}">${i}</a>`;
-            
+
             if (i !== this.currentPage && this.totalPages > 1) {
                 li.querySelector('a').addEventListener('click', async (e) => {
                     e.preventDefault();
@@ -609,7 +637,7 @@ class LeadsManager {    constructor(apiManager) {
             }
             ul.appendChild(li);
         }
-        
+
         // Last page + ellipsis
         if (endPage < this.totalPages) {
             if (endPage < this.totalPages - 1) {
@@ -618,7 +646,7 @@ class LeadsManager {    constructor(apiManager) {
                 ellipsisLi.innerHTML = '<span class="page-link">...</span>';
                 ul.appendChild(ellipsisLi);
             }
-              const lastLi = document.createElement('li');
+            const lastLi = document.createElement('li');
             lastLi.className = 'page-item';
             lastLi.innerHTML = `<a class="page-link" href="#" style="background-color: #28a745; border-color: #28a745; color: white;">${this.totalPages}</a>`;
             lastLi.querySelector('a').addEventListener('click', async (e) => {
@@ -630,7 +658,7 @@ class LeadsManager {    constructor(apiManager) {
         const nextLi = document.createElement('li');
         nextLi.className = `page-item ${this.currentPage === this.totalPages || this.totalPages <= 1 ? 'disabled' : ''}`;
         const nextDisabled = this.currentPage === this.totalPages || this.totalPages <= 1;
-        const nextStyle = nextDisabled 
+        const nextStyle = nextDisabled
             ? 'background-color: #6c757d; border-color: #6c757d; color: white; opacity: 0.65;'
             : 'background-color: #28a745; border-color: #28a745; color: white;';
         nextLi.innerHTML = `
@@ -645,32 +673,32 @@ class LeadsManager {    constructor(apiManager) {
             });
         }
         ul.appendChild(nextLi);
-          pagination.appendChild(ul);
-        
+        pagination.appendChild(ul);
+
         // Add pagination to both containers
         [paginationContainer, paginationContainerTop].forEach(container => {
             if (container) {
                 const paginationClone = pagination.cloneNode(true);
-                
+
                 // Re-attach event listeners to the cloned pagination
                 const prevBtn = paginationClone.querySelector('.page-item:first-child a');
                 const nextBtn = paginationClone.querySelector('.page-item:last-child a');
                 const pageLinks = paginationClone.querySelectorAll('.page-link');
-                
+
                 if (prevBtn && this.currentPage > 1) {
                     prevBtn.addEventListener('click', async (e) => {
                         e.preventDefault();
                         await this.goToPage(this.currentPage - 1);
                     });
                 }
-                
+
                 if (nextBtn && this.currentPage < this.totalPages) {
                     nextBtn.addEventListener('click', async (e) => {
                         e.preventDefault();
                         await this.goToPage(this.currentPage + 1);
                     });
                 }
-                
+
                 // Re-attach page number click handlers
                 pageLinks.forEach((link, index) => {
                     const pageText = link.textContent;
@@ -681,25 +709,26 @@ class LeadsManager {    constructor(apiManager) {
                             await this.goToPage(pageNum);
                         });
                     }
-                });                  container.appendChild(paginationClone);
+                }); container.appendChild(paginationClone);
             } else {
                 console.warn('Pagination container not found');
             }
         });
     }
-    
+
     // Go to specific page
     async goToPage(page) {
         if (page < 1 || page > this.totalPages) return;
         this.currentPage = page;
-        await this.refreshCurrentView();    }
-    
+        await this.refreshCurrentView();
+    }
+
     // Refresh current view with pagination
     async refreshCurrentView() {
         // Get current search and status filters from UI
         const searchInput = document.getElementById('lead-search');
         const statusFilter = document.getElementById('lead-status-filter');
-        
+
         this.currentFilters = {
             search: searchInput?.value || '',
             status: statusFilter?.value || '',
@@ -715,11 +744,9 @@ class LeadsManager {    constructor(apiManager) {
     // Generate dynamic table headers
     generateTableHeaders(headerElement) {
         if (!headerElement) return;
-        
+
         headerElement.innerHTML = '';
-        
-        // No more standard hardcoded columns - all fields are now custom
-        
+
         // Add list-specific label columns if a list is selected
         if (this.selectedListId) {
             const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);
@@ -727,6 +754,33 @@ class LeadsManager {    constructor(apiManager) {
                 selectedList.labels.forEach(label => {
                     const th = document.createElement('th');
                     th.textContent = label.label;
+
+                    // Add sort icon
+                    const sortIcon = document.createElement('span');
+                    sortIcon.style.marginLeft = '5px';
+                    sortIcon.innerHTML = (this.sortField === label.name)
+                        ? (this.sortOrder === 'asc' ? '▲' : '▼')
+                        : '⇅';
+                    th.appendChild(sortIcon);
+
+                    // Make the whole header clickable (except for phone fields)
+                    if (!this.isPhoneField(label.name)) {
+                        th.style.cursor = 'pointer';
+                        th.classList.add('sortable-header');
+                        th.addEventListener('click', () => {
+                            if (this.sortField === label.name) {
+                                this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+                            } else {
+                                this.sortField = label.name;
+                                this.sortOrder = 'asc';
+                            }
+                            this.sortLeads();
+                            this.displayLeads(this.currentLeads);
+                        });
+                    } else {
+                        th.style.cursor = 'default';
+                    }
+
                     headerElement.appendChild(th);
                 });
             }
@@ -740,31 +794,89 @@ class LeadsManager {    constructor(apiManager) {
                     });
                 }
             });
-            
+
             // Add unique labels
             allLabels.forEach((displayLabel, fieldName) => {
                 const th = document.createElement('th');
                 th.textContent = displayLabel;
+
+                // Add sort icon
+                const sortIcon = document.createElement('span');
+                sortIcon.style.marginLeft = '5px';
+                sortIcon.innerHTML = (this.sortField === fieldName)
+                    ? (this.sortOrder === 'asc' ? '▲' : '▼')
+                    : '⇅';
+                th.appendChild(sortIcon);
+
+                // Make the whole header clickable (except for phone fields)
+                if (!this.isPhoneField(fieldName)) {
+                    th.style.cursor = 'pointer';
+                    th.classList.add('sortable-header');
+                    th.addEventListener('click', () => {
+                        if (this.sortField === fieldName) {
+                            this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            this.sortField = fieldName;
+                            this.sortOrder = 'asc';
+                        }
+                        this.sortLeads();
+                        this.displayLeads(this.currentLeads);
+                    });
+                } else {
+                    th.style.cursor = 'default';
+                }
+
                 headerElement.appendChild(th);
             });
         }
-        
-        // Add status column
+
+        // Add status column (sortable)
         const statusTh = document.createElement('th');
         statusTh.textContent = 'Status';
+
+        // Add sort icon for status
+        const statusSortIcon = document.createElement('span');
+        statusSortIcon.style.marginLeft = '5px';
+        statusSortIcon.innerHTML = (this.sortField === 'status')
+            ? (this.sortOrder === 'asc' ? '▲' : '▼')
+            : '⇅';
+        statusTh.appendChild(statusSortIcon);
+
+        // Make status header clickable for sorting
+        statusTh.style.cursor = 'pointer';
+        statusTh.classList.add('sortable-header');
+        statusTh.addEventListener('click', () => {
+            if (this.sortField === 'status') {
+                this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortField = 'status';
+                this.sortOrder = 'asc';
+            }
+            this.sortLeads();
+            this.displayLeads(this.currentLeads);
+        });
+
         headerElement.appendChild(statusTh);
-    }    // Generate lead row HTML
+    }
+
+
+    // Generate lead row HTML
     generateLeadRow(lead) {
         let rowHtml = '';
-        
+
         // Add list-specific label data
         if (this.selectedListId) {
-            const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);            if (selectedList && selectedList.labels && selectedList.labels.length > 0) {                selectedList.labels.forEach(label => {
+            const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId); if (selectedList && selectedList.labels && selectedList.labels.length > 0) {
+                selectedList.labels.forEach(label => {
                     const value = lead.customFields?.[label.name] || '-';                    // Check if this is a phone field and format it for click-to-call
                     if (this.isPhoneField(label.name) && value && value !== '-') {
                         const formattedPhone = this.formatPhoneForCall(value);
                         const displayPhone = this.formatPhoneForDisplay(value);
-                        rowHtml += `<td><span class="phone-link" data-phone="${formattedPhone}" title="Click to call with MicroSip" style="cursor: pointer; color: #0066cc; text-decoration: underline;">${displayPhone}</span></td>`;
+                        rowHtml += `<td>
+    <span class="phone-link big-phone-link" data-phone="${formattedPhone}" title="Click to call with MicroSip">
+        <span style="font-size:2rem; vertical-align:middle;">${displayPhone}</span>
+    </span>
+</td>`;
                     } else {
                         rowHtml += `<td>${value}</td>`;
                     }
@@ -782,19 +894,24 @@ class LeadsManager {    constructor(apiManager) {
             });            // Add data for each unique label
             allLabels.forEach((displayLabel, fieldName) => {
                 const value = lead.customFields?.[fieldName] || '-';
-                
+
                 // Check if this is a phone field and format it for click-to-call
                 if (this.isPhoneField(fieldName) && value && value !== '-') {
                     const formattedPhone = this.formatPhoneForCall(value);
                     const displayPhone = this.formatPhoneForDisplay(value);
-                    rowHtml += `<td><span class="phone-link" data-phone="${formattedPhone}" title="Click to call with MicroSip" style="cursor: pointer; color: #0066cc; text-decoration: underline;">${displayPhone}</span></td>`;
+                    rowHtml += `<td>
+    <span class="phone-link big-phone-link" data-phone="${formattedPhone}" title="Click to call with MicroSip">
+        <span style="font-size:2rem; vertical-align:middle;">${displayPhone}</span>
+    </span>
+</td>`;
                 } else {
                     rowHtml += `<td>${value}</td>`;
                 }
-            });}          // Add status dropdown instead of badge
+            });
+        }          // Add status dropdown instead of badge
         const statusOptions = [
             'new',
-            'No Answer', 
+            'No Answer',
             'Voice Mail',
             'Call Back Qualified',
             'Call Back NOT Qualified',
@@ -803,7 +920,7 @@ class LeadsManager {    constructor(apiManager) {
             'withdrawn',
             'inactive'
         ];
-        
+
         let statusHtml = `
             <div class="status-dropdown-wrapper" data-bs-toggle="tooltip" data-bs-placement="top" title="Click to change status">
                 <select class="form-select form-select-sm lead-status-dropdown" 
@@ -811,28 +928,28 @@ class LeadsManager {    constructor(apiManager) {
                         title="Change lead status" 
                         aria-label="Change lead status"
                         onchange="window.leadsManager.updateLeadStatus('${lead._id}', this.value)">
-                    ${statusOptions.map(option => 
-                        `<option value="${option}" ${lead.status === option ? 'selected' : ''}>${this.formatStatus(option)}</option>`
-                    ).join('')}
+                    ${statusOptions.map(option =>
+            `<option value="${option}" ${lead.status === option ? 'selected' : ''}>${this.formatStatus(option)}</option>`
+        ).join('')}
                 </select>
             </div>
         `;
-        
+
         // Add ownership indicator if lead is owned
         if (lead.assignedTo && lead.assignedTo.name) {
             statusHtml += `<br><small class="text-muted ownership-indicator mt-1">
                 <i class="fas fa-user"></i> Owned by ${lead.assignedTo.name}
             </small>`;
         }
-        
+
         rowHtml += `<td>${statusHtml}</td>`;
-        
+
         return rowHtml;
     }    // Filter leads by selected list (now triggers server fetch)
     async filterLeadsByList() {
         // Reset to first page when filtering
         this.currentPage = 1;
-        
+
         // Refresh view with current filters
         await this.refreshCurrentView();
     }
@@ -841,15 +958,15 @@ class LeadsManager {    constructor(apiManager) {
     setupLeadFilters() {
         // Clean up existing filter listeners first
         this.cleanupFilterEventListeners();
-        
+
         const searchInput = document.getElementById('lead-search');
         const statusFilter = document.getElementById('lead-status-filter');
         const listFilter = document.getElementById('lead-list-filter');
         const resetFiltersBtn = document.getElementById('reset-filters-btn');
-        
+
         // Populate list filter dropdown
         this.populateListFilterDropdown();
-        
+
         // Function to apply filters (now with server-side pagination)
         const applyFilters = async () => {
             // Update current filters
@@ -857,10 +974,10 @@ class LeadsManager {    constructor(apiManager) {
                 search: searchInput?.value || '',
                 status: statusFilter?.value || ''
             };
-            
+
             // Reset to first page when applying new filters
             this.currentPage = 1;
-            
+
             // Refresh view with new filters
             await this.refreshCurrentView();
         };
@@ -873,14 +990,14 @@ class LeadsManager {    constructor(apiManager) {
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(applyFilters, 500); // 500ms delay
             };
-              searchInput.addEventListener('input', debouncedSearch);
+            searchInput.addEventListener('input', debouncedSearch);
             this.eventListeners.push({
                 element: searchInput,
                 event: 'input',
                 handler: debouncedSearch
             });
         }
-        
+
         if (statusFilter) {
             statusFilter.addEventListener('change', applyFilters);
             this.eventListeners.push({
@@ -889,7 +1006,7 @@ class LeadsManager {    constructor(apiManager) {
                 handler: applyFilters
             });
         }
-        
+
         if (listFilter) {
             const listFilterHandler = async (e) => {
                 const listId = e.target.value || null;
@@ -902,7 +1019,7 @@ class LeadsManager {    constructor(apiManager) {
                 handler: listFilterHandler
             });
         }
-          if (resetFiltersBtn) {
+        if (resetFiltersBtn) {
             const resetHandler = async () => {
                 if (searchInput) searchInput.value = '';
                 if (statusFilter) statusFilter.value = '';
@@ -930,7 +1047,7 @@ class LeadsManager {    constructor(apiManager) {
         const currentSelection = listFilter.value;
 
         listFilter.innerHTML = '<option value="">Select a List</option>';
-        
+
         this.allLeadLists.forEach(list => {
             const option = document.createElement('option');
             option.value = list._id;
@@ -951,15 +1068,15 @@ class LeadsManager {    constructor(apiManager) {
     async loadAgentsForDropdown() {
         try {
             const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/users?role=agent`);
-            
+
             if (!response.ok) {
                 throw new Error('Failed to fetch agents');
             }
-            
+
             const agents = await response.json();
             const addDropdown = document.getElementById('lead-agent');
             const editDropdown = document.getElementById('edit-lead-agent');
-            
+
             // Clear existing options
             if (addDropdown) {
                 addDropdown.innerHTML = '<option value="">Select Agent</option>';
@@ -967,13 +1084,13 @@ class LeadsManager {    constructor(apiManager) {
             if (editDropdown) {
                 editDropdown.innerHTML = '<option value="">Select Agent</option>';
             }
-            
+
             // Add active agents to dropdowns
             agents.filter(agent => agent.status === 'active').forEach(agent => {
                 const option = document.createElement('option');
                 option.value = agent._id;
                 option.textContent = agent.name;
-                
+
                 if (addDropdown) addDropdown.appendChild(option.cloneNode(true));
                 if (editDropdown) editDropdown.appendChild(option);
             });
@@ -984,7 +1101,7 @@ class LeadsManager {    constructor(apiManager) {
     async handleAddLead() {
         const form = document.getElementById('add-lead-form');
         if (!form) return;
-        
+
         const leadData = {
             fullName: document.getElementById('lead-name')?.value || '',
             email: document.getElementById('lead-email')?.value || '',
@@ -1007,18 +1124,18 @@ class LeadsManager {    constructor(apiManager) {
                 },
                 body: JSON.stringify(leadData)
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to add lead');
             }
-            
+
             // Close modal and reload leads
             const modal = bootstrap.Modal.getInstance(document.getElementById('addLeadModal'));
             if (modal) modal.hide();
-            
+
             // Clear form
             form.reset();
-            
+
             // Reload leads
             this.loadLeads();
         } catch (err) {
@@ -1035,22 +1152,22 @@ class LeadsManager {    constructor(apiManager) {
         if (typeof resetModalButtons === 'function') {
             resetModalButtons();
         }
-        
+
         // Clean up any existing modal event listeners
         this.cleanupModalEventListeners();
-          var leadNoteId = document.getElementById('lead-note-id');
+        var leadNoteId = document.getElementById('lead-note-id');
         var leadNoteStatus = document.getElementById('lead-note-status');
         var leadNotesContainer = document.getElementById('lead-notes-container');
         var ownLeadBtn = document.getElementById('own-lead-btn');
         var releaseLeadBtn = document.getElementById('release-lead-btn');
         var transferLeadBtn = document.getElementById('transfer-lead-btn');
-        
+
         // Clear previous note textarea
         var noteContent = document.getElementById('lead-note-content');
         if (noteContent) {
             noteContent.value = '';
         }
-        
+
         // Set lead ID and status
         if (leadNoteId) {
             leadNoteId.value = lead._id;
@@ -1058,19 +1175,19 @@ class LeadsManager {    constructor(apiManager) {
         if (leadNoteStatus) {
             leadNoteStatus.value = lead.status || 'new';
         }
-          // Display previous notes if any
+        // Display previous notes if any
         if (leadNotesContainer) {
             this.displayLeadNotes(lead, leadNotesContainer);
         }
-          // Handle button visibility based on lead ownership
+        // Handle button visibility based on lead ownership
         const currentUser = this.apiManager.getCurrentUser();
         const isLeadOwned = lead.assignedTo && lead.assignedTo._id;
         const isOwnedByCurrentUser = isLeadOwned && currentUser && lead.assignedTo._id === currentUser.id;
         const isAdmin = currentUser && currentUser.role === 'admin';
-        
+
         // Access the take over button
         var takeOverLeadBtn = document.getElementById('take-over-lead-btn');
-        
+
         if (ownLeadBtn) {
             // Hide Own Lead button for admins or if lead is already owned
             if (isAdmin || isLeadOwned) {
@@ -1084,7 +1201,7 @@ class LeadsManager {    constructor(apiManager) {
         if (releaseLeadBtn) {
             releaseLeadBtn.style.display = 'none';
         }
-        
+
         if (takeOverLeadBtn) {
             // Show Take Over button if lead is owned by someone else (not the current user)
             if (isLeadOwned && !isOwnedByCurrentUser && !isAdmin) {
@@ -1093,18 +1210,18 @@ class LeadsManager {    constructor(apiManager) {
                 takeOverLeadBtn.style.display = 'none';
             }
         }
-          if (transferLeadBtn) {
+        if (transferLeadBtn) {
             if (isAdmin) {
                 transferLeadBtn.style.display = 'inline-block';
             } else {
                 transferLeadBtn.style.display = 'none';
             }
         }
-        
+
         // Handle ownership notice visibility
         const ownershipNotice = document.getElementById('lead-ownership-notice');
         const ownerNameSpan = document.getElementById('lead-owner-name');
-        
+
         if (ownershipNotice && ownerNameSpan) {
             if (isLeadOwned && lead.assignedTo && lead.assignedTo.name) {
                 // Show ownership notice with owner's name
@@ -1115,29 +1232,30 @@ class LeadsManager {    constructor(apiManager) {
                 ownershipNotice.style.display = 'none';
             }
         }
-        
+
         var modal = new bootstrap.Modal(document.getElementById('leadNotesModal'));
         modal.show();
-          // Add event listener to the save note button
+        // Add event listener to the save note button
         var saveNoteBtn = document.getElementById('save-lead-note-btn');
         if (saveNoteBtn) {
             // Remove any existing event listeners to prevent duplicates
             var newSaveBtn = saveNoteBtn.cloneNode(true);
             saveNoteBtn.parentNode.replaceChild(newSaveBtn, saveNoteBtn);
-            
+
             // Add new event listener
             const saveNoteHandler = () => {
                 this.saveLeadNote(lead._id);
             };
             newSaveBtn.addEventListener('click', saveNoteHandler);
-            
+
             // Track this event listener for cleanup
             this.eventListeners.push({
                 element: newSaveBtn,
                 event: 'click',
                 handler: saveNoteHandler,
                 type: 'modal'
-            });        }
+            });
+        }
 
         // Release lead functionality is not available on the Leads page
         // Lead release is handled from the Customers page only
@@ -1147,13 +1265,13 @@ class LeadsManager {    constructor(apiManager) {
             // Remove any existing event listeners to prevent duplicates
             var newTransferBtn = transferLeadBtn.cloneNode(true);
             transferLeadBtn.parentNode.replaceChild(newTransferBtn, transferLeadBtn);
-            
+
             // Add new event listener
             const transferLeadHandler = () => {
                 this.showTransferLeadModal(lead._id);
             };
             newTransferBtn.addEventListener('click', transferLeadHandler);
-            
+
             // Track this event listener for cleanup
             this.eventListeners.push({
                 element: newTransferBtn,
@@ -1162,20 +1280,20 @@ class LeadsManager {    constructor(apiManager) {
                 type: 'modal'
             });
         }
-        
+
         // Add event listener to the take over lead button
         var takeOverLeadBtn = document.getElementById('take-over-lead-btn');
         if (takeOverLeadBtn) {
             // Remove any existing event listeners to prevent duplicates
             var newTakeOverBtn = takeOverLeadBtn.cloneNode(true);
             takeOverLeadBtn.parentNode.replaceChild(newTakeOverBtn, takeOverLeadBtn);
-            
+
             // Add new event listener
             const takeOverLeadHandler = () => {
                 this.takeOverLead(lead._id);
             };
             newTakeOverBtn.addEventListener('click', takeOverLeadHandler);
-            
+
             // Track this event listener for cleanup
             this.eventListeners.push({
                 element: newTakeOverBtn,
@@ -1184,18 +1302,18 @@ class LeadsManager {    constructor(apiManager) {
                 type: 'modal'
             });
         }
-          // Add event listener to the own lead button
+        // Add event listener to the own lead button
         if (ownLeadBtn) {
             // Remove any existing event listeners to prevent duplicates
             var newOwnBtn = ownLeadBtn.cloneNode(true);
             ownLeadBtn.parentNode.replaceChild(newOwnBtn, ownLeadBtn);
-            
+
             // Add new event listener
             const ownLeadHandler = () => {
                 this.ownLead(lead._id);
             };
             newOwnBtn.addEventListener('click', ownLeadHandler);
-            
+
             // Track this event listener for cleanup
             this.eventListeners.push({
                 element: newOwnBtn,
@@ -1209,21 +1327,21 @@ class LeadsManager {    constructor(apiManager) {
     // Display lead notes
     displayLeadNotes(lead, container) {
         if (!container) return;
-        
+
         container.innerHTML = '';
-        
+
         if (!lead.notes || lead.notes.length === 0) {
             container.innerHTML = '<div class="text-center text-muted py-2">No notes yet</div>';
             return;
         }
-          // Sort notes by newest first
-        const sortedNotes = [...lead.notes].sort((a, b) => 
+        // Sort notes by newest first
+        const sortedNotes = [...lead.notes].sort((a, b) =>
             new Date(b.createdAt) - new Date(a.createdAt)
         );
-        
+
         // Get current user for ID comparison
         const currentUser = this.apiManager.getCurrentUser();
-        
+
         // Create note elements
         sortedNotes.forEach(note => {
             const noteDate = new Date(note.createdAt).toLocaleString();
@@ -1248,28 +1366,28 @@ class LeadsManager {    constructor(apiManager) {
             container.appendChild(noteDiv);
         });
     }
-      // Save lead note
+    // Save lead note
     async saveLeadNote(leadId) {
         const noteContent = document.getElementById('lead-note-content').value.trim();
         const noteStatus = document.getElementById('lead-note-status').value;
-        
+
         // Note content is optional, but we need to update the status
         try {
             // Get the current user
             const currentUser = this.apiManager.getCurrentUser();
-            
+
             // Prepare the data - only include the note if there's content
             const data = {
                 status: noteStatus
             };
-              // Only add the note if there's actual content
+            // Only add the note if there's actual content
             if (noteContent) {
                 data.note = {
                     content: noteContent,
                     createdBy: currentUser ? currentUser.id : null
                 };
             }
-            
+
             const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/leads/${leadId}/notes`, {
                 method: 'POST',
                 headers: {
@@ -1277,21 +1395,21 @@ class LeadsManager {    constructor(apiManager) {
                 },
                 body: JSON.stringify(data)
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to update lead');
             }
-            
+
             // Close modal and reload leads
             const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
             if (modal) modal.hide();
-            
+
             // Reload leads
             this.loadLeads();
-              // Show success message
+            // Show success message
             const message = noteContent ? 'Note added successfully' : 'Status updated successfully';
             this.apiManager.showAlert(message, 'success');
-            
+
         } catch (err) {
             console.error('Error updating lead:', err);
             this.apiManager.showAlert('Failed to update lead: ' + err.message, 'danger');
@@ -1302,36 +1420,36 @@ class LeadsManager {    constructor(apiManager) {
             // Check if there's unsaved note content in the modal
             const noteContent = document.getElementById('lead-note-content')?.value?.trim();
             const noteStatus = document.getElementById('lead-note-status')?.value;
-            
+
             // If there's note content, save it first before owning the lead
             if (noteContent) {
                 await this.saveLeadNote(leadId);
                 // Small delay to ensure the note is saved before proceeding
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
-            
+
             const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/leads/${leadId}/own`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to own lead');
             }
-            
+
             const result = await response.json();
-            
+
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
             if (modal) modal.hide();
-            
+
             // Reload leads to reflect the changes
             await this.refreshCurrentView();
             // Show success message
             this.apiManager.showAlert('Lead successfully owned and customer record created', 'success');
-            
+
         } catch (err) {
             console.error('Error claiming lead:', err);
             this.apiManager.showAlert(`Error: ${err.message}`, 'danger');
@@ -1342,41 +1460,42 @@ class LeadsManager {    constructor(apiManager) {
             // Check if there's unsaved note content in the modal
             const noteContent = document.getElementById('lead-note-content')?.value?.trim();
             const noteStatus = document.getElementById('lead-note-status')?.value;
-            
+
             // If there's note content, save it first before releasing the lead
             if (noteContent) {
                 await this.saveLeadNote(leadId);
                 // Small delay to ensure the note is saved before proceeding
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
-            
+
             const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/leads/${leadId}/release`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to release lead');
             }
-            
+
             const result = await response.json();
-            
+
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
             if (modal) modal.hide();
-            
+
             // Reload leads to reflect the changes
             await this.loadLeads();
-            
+
             // Show success message
             this.apiManager.showAlert('Lead successfully released back to general pool', 'success');
-            
+
         } catch (err) {
             console.error('Error releasing lead:', err);
             this.apiManager.showAlert(`Error: ${err.message}`, 'danger');
-        }    }
+        }
+    }
 
     // Take Over Lead - Allow agents to take ownership of leads owned by other agents
     async takeOverLead(leadId) {
@@ -1384,37 +1503,37 @@ class LeadsManager {    constructor(apiManager) {
             // Check if there's unsaved note content in the modal
             const noteContent = document.getElementById('lead-note-content')?.value?.trim();
             const noteStatus = document.getElementById('lead-note-status')?.value;
-            
+
             // If there's note content, save it first before taking over the lead
             if (noteContent) {
                 await this.saveLeadNote(leadId);
                 // Small delay to ensure the note is saved before proceeding
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
-            
+
             const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/leads/${leadId}/take-over`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to take over lead');
             }
-            
+
             const result = await response.json();
-            
+
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
             if (modal) modal.hide();
-            
+
             // Reload leads to reflect the changes
             await this.loadLeads();
-            
+
             // Show success message
             this.apiManager.showAlert('Lead successfully taken over', 'success');
-            
+
         } catch (err) {
             console.error('Error taking over lead:', err);
             this.apiManager.showAlert(`Error: ${err.message}`, 'danger');
@@ -1429,9 +1548,9 @@ class LeadsManager {    constructor(apiManager) {
             if (!response.ok) {
                 throw new Error('Failed to load lead lists');
             }
-            
+
             const leadLists = await response.json();
-            
+
             // Create modal HTML
             const modalHtml = `
                 <div class="modal fade" id="transferLeadModal" tabindex="-1">
@@ -1476,7 +1595,7 @@ class LeadsManager {    constructor(apiManager) {
             // Show modal
             const modal = new bootstrap.Modal(document.getElementById('transferLeadModal'));
             modal.show();
-            
+
         } catch (err) {
             console.error('Error showing transfer modal:', err);
             this.apiManager.showAlert(`Error: ${err.message}`, 'danger');
@@ -1487,12 +1606,12 @@ class LeadsManager {    constructor(apiManager) {
     async transferLead(leadId) {
         const targetListSelect = document.getElementById('transfer-target-list');
         const targetListId = targetListSelect?.value;
-        
+
         if (!targetListId) {
             this.apiManager.showAlert('Please select a target list', 'warning');
             return;
         }
-        
+
         try {
             const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/leads/${leadId}/transfer`, {
                 method: 'POST',
@@ -1501,27 +1620,27 @@ class LeadsManager {    constructor(apiManager) {
                 },
                 body: JSON.stringify({ targetListId })
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to transfer lead');
             }
-            
+
             const result = await response.json();
-            
+
             // Close transfer modal
             const transferModal = bootstrap.Modal.getInstance(document.getElementById('transferLeadModal'));
             if (transferModal) transferModal.hide();
-            
+
             // Close lead notes modal
             const notesModal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
             if (notesModal) notesModal.hide();
-            
+
             // Reload leads to reflect the changes
             await this.loadLeads();
-            
+
             // Show success message
             this.apiManager.showAlert(result.message, 'success');
-            
+
         } catch (err) {
             console.error('Error transferring lead:', err);
             this.apiManager.showAlert(`Error: ${err.message}`, 'danger');
@@ -1581,15 +1700,15 @@ class LeadsManager {    constructor(apiManager) {
                 },
                 body: JSON.stringify(leadData)
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to update lead');
             }
-            
+
             // Close modal and reload leads
             const modal = bootstrap.Modal.getInstance(document.getElementById('editLeadModal'));
             if (modal) modal.hide();
-            
+
             // Reload leads
             this.loadLeads();
         } catch (err) {
@@ -1604,7 +1723,8 @@ class LeadsManager {    constructor(apiManager) {
             return status.charAt(0).toUpperCase() + status.slice(1);
         }
         // For legacy hyphenated statuses, convert hyphens to spaces and capitalize
-        return status.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');    }
+        return status.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    }
 
     // Refresh lead list card counts    // Update lead status from dropdown
     async updateLeadStatus(leadId, newStatus) {
@@ -1616,11 +1736,11 @@ class LeadsManager {    constructor(apiManager) {
                 },
                 body: JSON.stringify({ status: newStatus })
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to update lead status');
             }
-              // Update the lead in our local array
+            // Update the lead in our local array
             const leadIndex = this.currentLeads.findIndex(lead => lead._id === leadId);
             if (leadIndex !== -1) {
                 this.currentLeads[leadIndex].status = newStatus;
@@ -1630,24 +1750,24 @@ class LeadsManager {    constructor(apiManager) {
                 // Add animation and success feedback classes
                 dropdown.classList.add('status-update-animation');
                 dropdown.classList.add('success-feedback');
-                
+
                 // Apply new status color immediately
                 this.applyStatusColors();
-                
+
                 // Remove animation classes after animation completes
                 setTimeout(() => {
                     dropdown.classList.remove('success-feedback');
                     dropdown.classList.remove('status-update-animation');
                 }, 1000);
             }
-            
+
             // Show status update toast
             this.showStatusUpdateToast(newStatus);
-            
+
         } catch (err) {
             console.error('Error updating lead status:', err);
             this.apiManager.showAlert(`Error updating status: ${err.message}`, 'danger');
-              // Revert the dropdown to the previous value
+            // Revert the dropdown to the previous value
             const dropdown = document.querySelector(`[data-lead-id="${leadId}"]`);
             if (dropdown) {
                 const lead = this.currentLeads.find(l => l._id === leadId);
@@ -1667,10 +1787,10 @@ class LeadsManager {    constructor(apiManager) {
             toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
             document.body.appendChild(toastContainer);
         }
-        
+
         // Create unique ID for this toast
         const toastId = 'status-toast-' + Date.now();
-        
+
         // Create toast HTML
         const toastHtml = `
             <div id="${toastId}" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
@@ -1682,10 +1802,10 @@ class LeadsManager {    constructor(apiManager) {
                 </div>
             </div>
         `;
-        
+
         // Add toast to container
         toastContainer.insertAdjacentHTML('beforeend', toastHtml);
-        
+
         // Initialize and show the toast
         const toastElement = document.getElementById(toastId);
         const toast = new bootstrap.Toast(toastElement, {
@@ -1693,7 +1813,7 @@ class LeadsManager {    constructor(apiManager) {
             delay: 3000
         });
         toast.show();
-        
+
         // Remove toast from DOM after it's hidden
         toastElement.addEventListener('hidden.bs.toast', () => {
             toastElement.remove();
@@ -1702,12 +1822,12 @@ class LeadsManager {    constructor(apiManager) {
     applyStatusColors() {
         document.querySelectorAll('.lead-status-dropdown').forEach(dropdown => {
             const status = dropdown.value;
-              // Remove existing status color classes
-            dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail', 
-                                     'status-call-back-qualified', 'status-call-back-not-qualified');
-            
+            // Remove existing status color classes
+            dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail',
+                'status-call-back-qualified', 'status-call-back-not-qualified');
+
             // Add class based on current status
-            switch(status) {
+            switch (status) {
                 case 'new':
                     dropdown.classList.add('status-new');
                     break;
@@ -1731,7 +1851,7 @@ class LeadsManager {    constructor(apiManager) {
     cleanupCardEventListeners() {        // Remove event listeners that are specific to cards
         this.eventListeners = this.eventListeners.filter(listener => {
             const isCardListener = listener.element.classList?.contains('lead-list-card');
-            
+
             if (isCardListener) {
                 listener.element.removeEventListener(listener.event, listener.handler);
                 return false; // Remove from tracking array
@@ -1743,7 +1863,7 @@ class LeadsManager {    constructor(apiManager) {
         // Remove event listeners that are specific to table rows
         this.eventListeners = this.eventListeners.filter(listener => {
             const isRowListener = listener.element.tagName === 'TR';
-            
+
             if (isRowListener) {
                 listener.element.removeEventListener(listener.event, listener.handler);
                 return false; // Remove from tracking array
@@ -1755,10 +1875,10 @@ class LeadsManager {    constructor(apiManager) {
         // Remove event listeners that are specific to filter elements
         this.eventListeners = this.eventListeners.filter(listener => {
             const isFilterListener = listener.element.id === 'lead-search' ||
-                                   listener.element.id === 'lead-status-filter' ||
-                                   listener.element.id === 'lead-list-filter' ||
-                                   listener.element.id === 'reset-filters-btn';
-            
+                listener.element.id === 'lead-status-filter' ||
+                listener.element.id === 'lead-list-filter' ||
+                listener.element.id === 'reset-filters-btn';
+
             if (isFilterListener) {
                 listener.element.removeEventListener(listener.event, listener.handler);
                 return false; // Remove from tracking array
@@ -1770,11 +1890,11 @@ class LeadsManager {    constructor(apiManager) {
         // Remove event listeners that are specific to modal elements
         this.eventListeners = this.eventListeners.filter(listener => {
             const isModalListener = listener.type === 'modal' ||
-                                   listener.element.id === 'save-lead-note-btn' ||
-                                   listener.element.id === 'own-lead-btn' ||
-                                   listener.element.id === 'release-lead-btn' ||
-                                   listener.element.id === 'transfer-lead-btn';
-            
+                listener.element.id === 'save-lead-note-btn' ||
+                listener.element.id === 'own-lead-btn' ||
+                listener.element.id === 'release-lead-btn' ||
+                listener.element.id === 'transfer-lead-btn';
+
             if (isModalListener) {
                 listener.element.removeEventListener(listener.event, listener.handler);
                 return false; // Remove from tracking array
@@ -1794,9 +1914,9 @@ class LeadsManager {    constructor(apiManager) {
     startAutoRefresh() {
         // Clear any existing interval
         this.stopAutoRefresh();
-        
+
         // Always enable auto-refresh when this method is called
-        this.autoRefreshEnabled = true;        this.autoRefreshInterval = setInterval(async () => {
+        this.autoRefreshEnabled = true; this.autoRefreshInterval = setInterval(async () => {
             // Only refresh if the leads page is active
             if (this.isLeadsPageActive) {
                 if (this.useOptimizedRefresh) {
@@ -1816,7 +1936,7 @@ class LeadsManager {    constructor(apiManager) {
     }    // Set leads page active state
     setPageActive(isActive) {
         this.isLeadsPageActive = isActive;
-        
+
         if (isActive) {
             this.startAutoRefresh();
         } else {
@@ -1834,11 +1954,11 @@ class LeadsManager {    constructor(apiManager) {
             // First, refresh lead lists data to pick up visibility changes and new counts
             await this.loadLeadLists();
             await this.updateLeadListCounts();
-            
+
             // Update lead list cards to reflect any visibility changes and updated counts
             // This is crucial for agents to see when admin hides/shows lists
             this.displayLeadListCards(true);
-            
+
             // Check if currently selected list is still visible to current user
             if (this.selectedListId) {
                 const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);
@@ -1854,39 +1974,39 @@ class LeadsManager {    constructor(apiManager) {
                     return; // selectLeadList will handle the display update
                 }
             }
-            
+
             // Only proceed if we have a selected list
             if (!this.selectedListId) {
                 return;
             }
-            
+
             // Fetch only the current page of leads with current filters
             const result = await this.fetchLeads(this.currentPage, this.leadsPerPage, this.currentFilters);
-            
+
             // Store the current leads data
             const newLeads = result.leads;
             const newTotalPages = result.pagination.totalPages;
             const newTotalCount = result.pagination.totalCount;
-            
+
             // Check if pagination changed (new leads added/removed that affect total pages)
             const paginationChanged = (this.totalPages !== newTotalPages || this.totalCount !== newTotalCount);
-            
+
             // Update our data
             this.currentLeads = newLeads;
             this.totalPages = newTotalPages;
             this.totalCount = newTotalCount;
-            
+
             // Only update the table body content (most efficient)
             this.updateTableBodyOnly(newLeads);
-            
+
             // If pagination changed, update pagination controls
             if (paginationChanged) {
                 this.updatePaginationInfo();
             }
-            
+
             // Update the list filter dropdown to reflect any changes
             this.populateListFilterDropdown();
-            
+
         } catch (err) {
             console.error('Error during optimized page refresh:', err);
             // On error, fall back to full refresh
@@ -1896,16 +2016,17 @@ class LeadsManager {    constructor(apiManager) {
 
     // Update only the table body content without rebuilding headers or pagination
     updateTableBodyOnly(leads) {
+        this.sortLeads();
         const tableBody = document.getElementById('leads-table-body');
         const noLeadsMessage = document.getElementById('no-leads-message');
-        
+
         if (!tableBody) return;
-        
+
         // Clean up existing row event listeners
         this.cleanupRowEventListeners();
-        
+
         tableBody.innerHTML = '';
-        
+
         // Show/hide no leads message
         if (leads.length === 0) {
             if (noLeadsMessage) noLeadsMessage.style.display = 'block';
@@ -1913,23 +2034,23 @@ class LeadsManager {    constructor(apiManager) {
         } else {
             if (noLeadsMessage) noLeadsMessage.style.display = 'none';
         }
-        
+
         // Add new lead rows
         leads.forEach(lead => {
             const row = document.createElement('tr');
             row.innerHTML = this.generateLeadRow(lead);
             row.dataset.leadId = lead._id;
-            
+
             // Check if lead is owned
             const isOwned = lead.assignedTo && lead.assignedTo._id;
-            
+
             // Make all leads clickable
             row.style.cursor = 'pointer';
-            
+
             if (isOwned) {
                 row.classList.add('owned-lead');
             }
-            
+
             // Add row click handler
             const rowClickHandler = (e) => {
                 if (!e.target.closest('.dropdown') && !e.target.closest('button') && !e.target.closest('select')) {
@@ -1937,19 +2058,19 @@ class LeadsManager {    constructor(apiManager) {
                 }
             };
             row.addEventListener('click', rowClickHandler);
-            
+
             this.eventListeners.push({
                 element: row,
                 event: 'click',
                 handler: rowClickHandler
             });
-            
+
             tableBody.appendChild(row);
         });
-        
+
         // Apply status colors to all dropdowns
         this.applyStatusColors();
-        
+
         // Initialize Bootstrap tooltips for new elements
         const tooltips = tableBody.querySelectorAll('[data-bs-toggle="tooltip"]');
         tooltips.forEach(tooltip => {
@@ -1961,22 +2082,22 @@ class LeadsManager {    constructor(apiManager) {
     updatePaginationInfo() {
         const paginationInfo = document.getElementById('pagination-info');
         const paginationInfoTop = document.getElementById('pagination-info-top');
-        
-        const infoText = this.totalCount === 0 
-            ? 'No leads to display' 
+
+        const infoText = this.totalCount === 0
+            ? 'No leads to display'
             : (() => {
                 const startIndex = (this.currentPage - 1) * this.leadsPerPage + 1;
                 const endIndex = Math.min(this.currentPage * this.leadsPerPage, this.totalCount);
                 return `Showing ${startIndex}-${endIndex} of ${this.totalCount} leads`;
             })();
-            
+
         if (paginationInfo) {
             paginationInfo.textContent = infoText;
         }
         if (paginationInfoTop) {
             paginationInfoTop.textContent = infoText;
         }
-        
+
         // If total pages changed significantly, we may need to rebuild pagination
         // This happens when leads are added/removed affecting total count
         const currentPaginationPages = document.querySelectorAll('#leads-pagination .page-link').length;
@@ -1989,9 +2110,9 @@ class LeadsManager {    constructor(apiManager) {
     // Check if a field is a phone field (for click-to-call)
     isPhoneField(fieldName) {
         return fieldName && (
-            fieldName.toLowerCase().includes('phone') || 
-            fieldName.toLowerCase().includes('tel') || 
-            fieldName.toLowerCase().includes('mobile') || 
+            fieldName.toLowerCase().includes('phone') ||
+            fieldName.toLowerCase().includes('tel') ||
+            fieldName.toLowerCase().includes('mobile') ||
             fieldName.toLowerCase().includes('cell')
         );
     }    // Format phone number for SIP calling
@@ -2002,7 +2123,7 @@ class LeadsManager {    constructor(apiManager) {
     }    // Format phone number for display with just a phone icon to save space
     formatPhoneForDisplay(phoneNumber) {
         if (!phoneNumber) return '';
-        
+
         // Return a different phone icon to save maximum space
         return '☎️';
     }
@@ -2031,7 +2152,7 @@ document.addEventListener('visibilitychange', () => {
         // Page became visible - check if leads page is currently active
         const leadsPage = document.getElementById('leads-page');
         const isLeadsPageVisible = leadsPage && leadsPage.style.display !== 'none';
-        
+
         if (isLeadsPageVisible && window.leadsManager) {
             // Restart auto-refresh for leads page
             window.leadsManager.setPageActive(true);
@@ -2049,7 +2170,7 @@ window.addEventListener('focus', () => {
     // Window gained focus - check if leads page is active
     const leadsPage = document.getElementById('leads-page');
     const isLeadsPageVisible = leadsPage && leadsPage.style.display !== 'none';
-    
+
     if (isLeadsPageVisible && window.leadsManager) {
         window.leadsManager.setPageActive(true);
     }
@@ -2058,5 +2179,6 @@ window.addEventListener('focus', () => {
 window.addEventListener('blur', () => {
     // Window lost focus - pause auto-refresh
     if (window.leadsManager) {
-        window.leadsManager.setPageActive(false);    }
+        window.leadsManager.setPageActive(false);
+    }
 });

@@ -502,7 +502,7 @@ class UploadManager {
 
         const modalHtml = `
             <div class="modal fade" id="createListModal" tabindex="-1">
-                <div class="modal-dialog modal-lg">
+                <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title">Create New Lead List</h5>
@@ -554,6 +554,7 @@ class UploadManager {
                                 <button type="submit" class="btn btn-primary">Create List</button>
                             </div>
                         </form>
+                        
                     </div>
                 </div>
             </div>
@@ -561,13 +562,13 @@ class UploadManager {
 
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }// Create Bulk Add Modal
-createBulkAddModal() {
-    if (document.getElementById('bulkAddModal')) return;
+    createBulkAddModal() {
+        if (document.getElementById('bulkAddModal')) return;
 
-    const modalHtml = `
+        const modalHtml = `
         <div class="modal fade" id="bulkAddModal" tabindex="-1">
-            <div class="modal-dialog modal-lg modal-dialog-centered" style="max-width: 100vw;">
-                <div class="modal-content" style="width: 100%; max-width: 700px; margin: auto;">
+            <div class="modal-dialog">
+                <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">Bulk Add Leads to List</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -588,28 +589,10 @@ createBulkAddModal() {
                 </div>
             </div>
         </div>
-        <style>
-            @media (max-width: 768px) {
-                #bulkAddModal .modal-dialog {
-                    max-width: 100vw !important;
-                    margin: 0;
-                }
-                #bulkAddModal .modal-content {
-                    border-radius: 0.5rem;
-                    max-width: 98vw;
-                    width: 100vw;
-                }
-            }
-            #bulkAddModal .modal-content {
-                width: 100%;
-                max-width: 700px;
-                margin: auto;
-            }
-        </style>
     `;
 
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-}
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
 
     // Add custom label field to create form
     addCustomLabel() {
@@ -933,25 +916,6 @@ createBulkAddModal() {
         specificAgentsSection.style.display = isVisibleToUsers ? 'none' : 'block';
     }
 
-    // Handle edit list form submission
-    async handleEditList(event) {
-        event.preventDefault();
-
-        const formData = new FormData(event.target);
-        const listId = formData.get('listId');
-        const name = formData.get('name');
-        const description = formData.get('description');
-        const isVisibleToUsers = formData.get('isVisible') === 'on';
-
-        // Collect selected agents if not visible to all
-        let visibleToSpecificAgents = [];
-        if (!isVisibleToUsers) {
-            const agentCheckboxes = document.querySelectorAll('input[name="editSpecificAgents"]:checked');
-            visibleToSpecificAgents = Array.from(agentCheckboxes).map(checkbox => checkbox.value);
-        }
-
-        await this.updateList(listId, name, description, isVisibleToUsers, visibleToSpecificAgents);
-    }
 
     // Update lead list
     async updateList(listId, name, description, isVisibleToUsers = true, visibleToSpecificAgents = []) {
@@ -1869,6 +1833,196 @@ createBulkAddModal() {
                 }
             };
         }
+    }
+
+    // Show edit list modal
+    async showEditListModal() {
+        if (!this.selectedList) return;
+        document.getElementById('editListModal')?.remove();
+        // Load agents for selection
+        const agents = await this.loadAgents();
+        const selectedAgentIds = (this.selectedList.visibleToSpecificAgents || []).map(a => typeof a === 'string' ? a : a._id);
+        let modalHtml = `
+            <div class="modal fade" id="editListModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Edit Lead List</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <form id="editListForm" onsubmit="event.preventDefault(); window.uploadManager.handleEditList(event);">
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label class="form-label">List Name *</label>
+                                    <input type="text" class="form-control" name="name" required value="${this.selectedList.name || ''}">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Description</label>
+                                    <textarea class="form-control" name="description" rows="3">${this.selectedList.description || ''}</textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="isVisibleToUsers" id="edit-list-visible" ${this.selectedList.isVisibleToUsers !== false ? 'checked' : ''}>
+                                        <label class="form-check-label" for="edit-list-visible">
+                                            <strong>Visible to All Agents</strong>
+                                        </label>
+                                        <div class="form-text">When checked, all agents can see this list. When unchecked, you can choose specific agents.</div>
+                                    </div>
+                                </div>
+                                <div class="mb-3" id="edit-specific-agents-section" style="display: ${this.selectedList.isVisibleToUsers === false ? 'block' : 'none'};">
+                                    <label class="form-label">Select Specific Agents</label>
+                                    <div id="edit-agents-selection" class="border rounded p-3">
+                                        ${agents.map(agent => `
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="editSpecificAgents" value="${agent._id}" id="edit-agent-${agent._id}" ${selectedAgentIds.includes(agent._id) ? 'checked' : ''}>
+                                                <label class="form-check-label" for="edit-agent-${agent._id}">
+                                                    ${agent.name} (${agent.email})
+                                                </label>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    <div class="form-text">Choose which agents can see this list when not visible to all agents.</div>
+                                </div>
+                                <hr>
+                                <h6>Custom Labels for this List</h6>
+                                <p class="text-muted">Edit, add, or remove custom fields for this lead list.</p>
+                                <div id="edit-custom-labels-container">
+                                    <!-- Custom labels will be added here -->
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="add-edit-custom-label-btn">
+                                    <i class="bi bi-plus me-1"></i> Add Custom Label
+                                </button>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Save Changes</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        this.renderEditCustomLabels();
+        document.getElementById('add-edit-custom-label-btn').onclick = () => this.addEditCustomLabel();
+        // Visibility toggle logic
+        const visibilityCheckbox = document.getElementById('edit-list-visible');
+        const specificAgentsSection = document.getElementById('edit-specific-agents-section');
+        visibilityCheckbox.addEventListener('change', function () {
+            if (this.checked) {
+                specificAgentsSection.style.display = 'none';
+                // Uncheck all agent checkboxes
+                const agentCheckboxes = document.querySelectorAll('input[name="editSpecificAgents"]');
+                agentCheckboxes.forEach(cb => cb.checked = false);
+            } else {
+                specificAgentsSection.style.display = 'block';
+            }
+        });
+        const modal = new bootstrap.Modal(document.getElementById('editListModal'));
+        modal.show();
+    }
+
+    // Keep this version!
+    handleEditList(e) {
+        const form = e.target;
+        const formData = new FormData(form);
+        this.selectedList.name = formData.get('name').trim();
+        this.selectedList.description = formData.get('description').trim();
+        this.selectedList.isVisibleToUsers = formData.get('isVisibleToUsers') === 'on';
+        let visibleToSpecificAgents = [];
+        if (!this.selectedList.isVisibleToUsers) {
+            const agentCheckboxes = form.querySelectorAll('input[name="editSpecificAgents"]:checked');
+            visibleToSpecificAgents = Array.from(agentCheckboxes).map(cb => cb.value);
+        }
+        this.selectedList.visibleToSpecificAgents = visibleToSpecificAgents;
+        // Labels
+        const labels = [];
+        let idx = 0;
+        while (formData.has(`label_name_${idx}`)) {
+            const name = formData.get(`label_name_${idx}`).trim();
+            const label = formData.get(`label_label_${idx}`).trim();
+            const type = formData.get(`label_type_${idx}`);
+            const required = formData.get(`label_required_${idx}`) === 'on';
+            let options = [];
+            if (type === 'select') {
+                options = (formData.get(`label_options_${idx}`) || '').split(',').map(opt => opt.trim()).filter(opt => opt);
+            }
+            if (name && label) {
+                labels.push({ name, label, type, required, options });
+            }
+            idx++;
+        }
+        this.selectedList.labels = labels;
+        this.apiManager.put(`/lead-lists/${this.selectedList._id}`, this.selectedList)
+            .then(() => {
+                this.apiManager.showAlert('List updated successfully', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('editListModal')).hide();
+                this.loadLeadLists && this.loadLeadLists();
+            })
+            .catch(err => {
+                this.apiManager.showAlert('Error updating list', 'danger');
+            });
+    }
+
+    renderEditCustomLabels() {
+        const container = document.getElementById('edit-custom-labels-container');
+        if (!container) return;
+        container.innerHTML = '';
+        (this.selectedList.labels || []).forEach((label, idx) => {
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'mb-2 border rounded p-2 position-relative';
+            labelDiv.innerHTML = `
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" name="label_name_${idx}" value="${label.name}" placeholder="Field Name" required>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" name="label_label_${idx}" value="${label.label}" placeholder="Display Label" required>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" name="label_type_${idx}">
+                            <option value="text" ${label.type === 'text' ? 'selected' : ''}>Text</option>
+                            <option value="number" ${label.type === 'number' ? 'selected' : ''}>Number</option>
+                            <option value="email" ${label.type === 'email' ? 'selected' : ''}>Email</option>
+                            <option value="phone" ${label.type === 'phone' ? 'selected' : ''}>Phone</option>
+                            <option value="select" ${label.type === 'select' ? 'selected' : ''}>Dropdown</option>
+                            <option value="textarea" ${label.type === 'textarea' ? 'selected' : ''}>Text Area</option>
+                        </select>
+                    </div>
+                    <div class="col-md-1">
+                        <input type="checkbox" class="form-check-input" name="label_required_${idx}" ${label.required ? 'checked' : ''} title="Required">
+                    </div>
+                    <div class="col-md-1">
+                        <button type="button" class="btn btn-sm btn-danger remove-label-btn" data-label-idx="${idx}"><i class="bi bi-x"></i></button>
+                    </div>
+                </div>
+                <div class="row mt-2" style="display:${label.type === 'select' ? 'block' : 'none'}" id="label-options-row-${idx}">
+                    <div class="col-12">
+                        <input type="text" class="form-control" name="label_options_${idx}" value="${(label.options || []).join(', ')}" placeholder="Comma-separated options for dropdown">
+                    </div>
+                </div>
+            `;
+            container.appendChild(labelDiv);
+        });
+        container.querySelectorAll('.remove-label-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                const idx = parseInt(btn.dataset.labelIdx);
+                this.selectedList.labels.splice(idx, 1);
+                this.renderEditCustomLabels();
+            };
+        });
+        container.querySelectorAll('select[name^="label_type_"]').forEach((select, idx) => {
+            select.onchange = (e) => {
+                const row = document.getElementById(`label-options-row-${idx}`);
+                if (row) row.style.display = select.value === 'select' ? 'block' : 'none';
+            };
+        });
+    }
+
+    addEditCustomLabel() {
+        if (!this.selectedList.labels) this.selectedList.labels = [];
+        this.selectedList.labels.push({ name: '', label: '', type: 'text', required: false, options: [] });
+        this.renderEditCustomLabels();
     }
 }
 

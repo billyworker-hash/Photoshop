@@ -28,7 +28,8 @@ mongoose.connect(process.env.MONGODB_URI)
 async function ensureUsersWithNoListExists() {
     try {
         let usersWithNoList = await LeadList.findOne({ name: 'Users with no list' });
-          if (!usersWithNoList) {            usersWithNoList = new LeadList({
+        if (!usersWithNoList) {
+            usersWithNoList = new LeadList({
                 name: 'Users with no list',
                 description: 'Default list for users whose original lead list has been deleted',
                 labels: [
@@ -40,11 +41,11 @@ async function ensureUsersWithNoListExists() {
                 isSystem: true, // Mark as system list
                 isVisible: true // Ensure system lists are visible by default
             });
-            
+
             await usersWithNoList.save();
             console.log('Created "Users with no list" system list');
         }
-        
+
         return usersWithNoList;
     } catch (error) {
         console.error('Error ensuring Users with no list:', error);
@@ -56,11 +57,11 @@ async function ensureUsersWithNoListExists() {
 function authenticate(req, res, next) {
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
-    
+
     if (!token) {
         return res.status(401).json({ message: 'Access token is required' });
     }
-    
+
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
@@ -84,29 +85,29 @@ function requireRole(role) {
 app.post('/api/register', async (req, res) => {
     try {
         const { name, email, password, role } = req.body;
-        
+
         if (!name || !email || !password) {
             return res.status(400).json({ message: 'Name, email, and password are required' });
         }
-        
+
         // Check if user already exists
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({ message: 'User with this email already exists' });
         }
-        
+
         const hashed = await bcrypt.hash(password, 10);
-        const user = new User({ 
-            name, 
-            email, 
-            passwordHash: hashed, 
+        const user = new User({
+            name,
+            email,
+            passwordHash: hashed,
             role: role || 'agent',
             status: 'active'
         });
-        
+
         await user.save();
-        
-        res.status(201).json({ 
+
+        res.status(201).json({
             message: 'User created successfully',
             user: {
                 id: user._id,
@@ -124,28 +125,28 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-        
+
         if (!email || !password) {
             return res.status(400).json({ message: 'Email and password are required' });
         }
-        
+
         const user = await User.findOne({ email, status: 'active' });
         if (!user) {
             return res.status(401).json({ message: 'Invalid email or password' });
         }
-        
+
         const validPassword = await bcrypt.compare(password, user.passwordHash);
         if (!validPassword) {
             return res.status(401).json({ message: 'Invalid email or password' });
         }
-        
-        const token = jwt.sign({ 
-            id: user._id, 
-            role: user.role, 
-            name: user.name 
+
+        const token = jwt.sign({
+            id: user._id,
+            role: user.role,
+            name: user.name
         }, process.env.JWT_SECRET, { expiresIn: '24h' });
-        
-        res.json({ 
+
+        res.json({
             token,
             user: {
                 id: user._id,
@@ -165,58 +166,83 @@ app.get('/api/leads', authenticate, async (req, res) => {
     try {
         // Both admin and agent can see all leads, but only admin can upload/create
         const filter = {};
-          // Add leadList filter if provided
+        // Add leadList filter if provided
         if (req.query.leadList) {
-            filter.leadList = req.query.leadList;        } else {
+            filter.leadList = req.query.leadList;
+        } else {
             // If no specific leadList is requested, only show leads from active lead lists
             // but exclude customer lists (owned leads)
-            let leadListFilter = { 
-                isActive: true, 
-                isCustomerList: { $ne: true } 
-            };            // For non-admin users, only include lists that are visible
+            let leadListFilter = {
+                isActive: true,
+                isCustomerList: { $ne: true }
+            };
+            // For non-admin users, only include lists that are visible
             if (req.user.role !== 'admin') {
                 leadListFilter.$or = [
                     { isVisibleToUsers: true },
                     { visibleToSpecificAgents: req.user.id }
                 ];
             }
-            
             const activeLeadLists = await LeadList.find(leadListFilter).select('_id');
             const activeListIds = activeLeadLists.map(list => list._id);
             // Include leads from active lists and exclude orphaned leads (null/undefined leadList)
             filter.leadList = { $in: activeListIds };
         }
-        
+
         // Add query filters if provided
         if (req.query.status) filter.status = req.query.status;
+
+        // --- UPDATED SEARCH LOGIC: search all fields including customFields ---
         if (req.query.search) {
-            const searchRegex = new RegExp(req.query.search, 'i');
+            const search = req.query.search;
+            const searchRegex = new RegExp(search, 'i');
             filter.$or = [
                 { fullName: searchRegex },
                 { email: searchRegex },
-                { phone: searchRegex }
+                { phone: searchRegex },
+                // Search any custom field value (works for Map fields in Mongoose >= 5.1)
+                {
+                    $expr: {
+                        $gt: [
+                            {
+                                $size: {
+                                    $filter: {
+                                        input: { $objectToArray: "$customFields" },
+                                        as: "cf",
+                                        cond: { $regexMatch: { input: "$$cf.v", regex: search, options: "i" } }
+                                    }
+                                }
+                            },
+                            0
+                        ]
+                    }
+                }
             ];
-        }        // Pagination parameters
+        }
+        // --- END UPDATED SEARCH LOGIC ---
+
+        // Pagination parameters
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
 
         // Get total count for pagination info
         const totalCount = await Lead.countDocuments(filter);
-          const leads = await Lead.find(filter)
+        const leads = await Lead.find(filter)
             .populate('assignedTo', 'name')
             .populate('notes.createdBy', 'name')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
-            // Log the fetch operation
+
+        // Log the fetch operation
         console.log(`[LEADS API] User: ${req.user.username} | Page: ${page} | Limit: ${limit} | Total Available: ${totalCount} | Fetched: ${leads.length} leads | Filters:`, {
             leadList: req.query.leadList || 'all_active',
             search: req.query.search || 'none',
             status: req.query.status || 'all',
             source: req.query.leadList ? 'upload_section' : 'leads_section'
         });
-          
+
         // Convert customFields Map to Object for each lead
         const leadsResponse = leads.map(lead => {
             const leadObj = lead.toObject();
@@ -225,7 +251,7 @@ app.get('/api/leads', authenticate, async (req, res) => {
             }
             return leadObj;
         });
-        
+
         // Send response with pagination metadata
         res.json({
             leads: leadsResponse,
@@ -249,23 +275,23 @@ app.post('/api/leads', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-        
+
         const { customFields, ...leadData } = req.body;
         const lead = new Lead(leadData);
-        
+
         // Handle custom fields
         if (customFields) {
             lead.customFields = new Map(Object.entries(customFields));
         }
-        
+
         await lead.save();
-        
+
         // Convert customFields Map to Object for JSON response
         const leadResponse = lead.toObject();
         if (leadResponse.customFields) {
             leadResponse.customFields = Object.fromEntries(leadResponse.customFields);
         }
-        
+
         res.status(201).json(leadResponse);
     } catch (error) {
         console.error('Lead creation error:', error);
@@ -276,24 +302,24 @@ app.post('/api/leads', authenticate, async (req, res) => {
 app.patch('/api/leads/:id', authenticate, async (req, res) => {
     try {
         const { customFields, ...leadData } = req.body;
-        
+
         const updateData = leadData;
         if (customFields) {
             updateData.customFields = new Map(Object.entries(customFields));
         }
-        
+
         const lead = await Lead.findByIdAndUpdate(req.params.id, updateData, { new: true });
-        
+
         if (!lead) {
             return res.status(404).json({ message: 'Lead not found' });
         }
-        
+
         // Convert customFields Map to Object for JSON response
         const leadResponse = lead.toObject();
         if (leadResponse.customFields) {
             leadResponse.customFields = Object.fromEntries(leadResponse.customFields);
         }
-        
+
         res.json(leadResponse);
     } catch (error) {
         console.error('Lead update error:', error);
@@ -305,46 +331,47 @@ app.patch('/api/leads/:id', authenticate, async (req, res) => {
 app.post('/api/leads/:id/notes', authenticate, async (req, res) => {
     try {
         const { status, note } = req.body;
-        
+
         // Find the lead
         const lead = await Lead.findById(req.params.id);
         if (!lead) {
             return res.status(404).json({ message: 'Lead not found' });
         }
-        
+
         // Update status if provided
         if (status) {
             lead.status = status;
         }
-        
+
         // Add note if provided
         if (note && note.content) {
             // If notes array doesn't exist, initialize it
             if (!lead.notes) {
                 lead.notes = [];
             }
-              // Add the note with current timestamp
+            // Add the note with current timestamp
             lead.notes.push({
                 content: note.content,
                 createdAt: new Date(),
                 createdBy: note.createdBy || req.user.id
             });
         }
-          await lead.save();
-        
+        await lead.save();
+
         // Populate the notes with user information
         await lead.populate('notes.createdBy', 'name');
-        
+
         // Convert customFields and notes for JSON response
         const leadResponse = lead.toObject();
         if (leadResponse.customFields) {
             leadResponse.customFields = Object.fromEntries(leadResponse.customFields);
         }
-        
+
         res.status(200).json(leadResponse);
     } catch (error) {
         console.error('Error adding note to lead:', error);
-        res.status(500).json({ message: 'Failed to add note to lead' });    }
+        res.status(500).json({ message: 'Failed to add note to lead' });
+    }
 });
 
 // Delete individual lead
@@ -356,7 +383,7 @@ app.delete('/api/leads/:id', authenticate, async (req, res) => {
         }
 
         const leadId = req.params.id;
-        
+
         // Find the lead
         const lead = await Lead.findById(leadId);
         if (!lead) {
@@ -380,26 +407,26 @@ app.post('/api/leads/:id/own', authenticate, async (req, res) => {
         if (req.user.role !== 'agent') {
             return res.status(403).json({ message: 'Only agents can own leads' });
         }
-          const leadId = req.params.id;
-          // Find the lead and populate its lead list
+        const leadId = req.params.id;
+        // Find the lead and populate its lead list
         const lead = await Lead.findById(leadId).populate('leadList');
         if (!lead) {
             return res.status(404).json({ message: 'Lead not found' });
         }
-        
+
         // Check if the lead is already owned by someone
         if (lead.assignedTo) {
-            return res.status(400).json({ 
-                message: lead.assignedTo.toString() === req.user.id 
-                    ? 'You already own this lead' 
-                    : 'This lead is already owned by another agent' 
+            return res.status(400).json({
+                message: lead.assignedTo.toString() === req.user.id
+                    ? 'You already own this lead'
+                    : 'This lead is already owned by another agent'
             });
         }
-          // Store original lead list information for customer record
+        // Store original lead list information for customer record
         const originalLeadList = lead.leadList;
         const originalListName = originalLeadList ? originalLeadList.name : 'Unknown List';
         const originalListLabels = originalLeadList ? originalLeadList.labels : [];
-        
+
         // Simply assign the lead to this agent (don't move it to a new list)
         lead.assignedTo = req.user.id;        // Add a note about lead ownership
         if (!lead.notes) {
@@ -410,7 +437,7 @@ app.post('/api/leads/:id/own', authenticate, async (req, res) => {
             createdAt: new Date(),
             createdBy: req.user.id
         });
-        
+
         // Create a new Customer record from this lead - copy exact schema info
         const newCustomer = new Customer({
             fullName: lead.customFields?.get('fullName') || lead.fullName || '',
@@ -436,16 +463,16 @@ app.post('/api/leads/:id/own', authenticate, async (req, res) => {
             ]
         });        // Save the lead (now marked as assigned to the agent)
         await lead.save();
-        
+
         // Populate the notes with user information
         await lead.populate('notes.createdBy', 'name');
-        
+
         // Save the new customer (this creates a customer record for the agent's management)
         await newCustomer.save();
-        
+
         // Populate the customer notes with user information
         await newCustomer.populate('notes.createdBy', 'name');
-        
+
         // Convert customer customFields for response
         const customerResponse = newCustomer.toObject();
         if (customerResponse.customFields) {
@@ -457,7 +484,7 @@ app.post('/api/leads/:id/own', authenticate, async (req, res) => {
         if (leadResponse.customFields) {
             leadResponse.customFields = Object.fromEntries(leadResponse.customFields);
         }
-          res.status(200).json({
+        res.status(200).json({
             lead: leadResponse,
             customer: customerResponse,
             message: 'Lead successfully owned and customer record created'
@@ -519,11 +546,12 @@ app.post('/api/leads/:id/release', authenticate, async (req, res) => {
             if (!customer.notes) {
                 customer.notes = [];
             }
-            
+
             customer.notes.push({
                 content: `Original lead was released back to general pool`,
                 createdAt: new Date(),
-                createdBy: req.user.id            });
+                createdBy: req.user.id
+            });
 
             await customer.save();
         }
@@ -597,11 +625,11 @@ app.post('/api/leads/:id/take-over', authenticate, async (req, res) => {
 
         // Handle customer records - find the existing customer record for the previous owner
         const existingCustomer = await Customer.findOne({ originalLead: leadId, agent: previousOwnerId });
-        
+
         if (existingCustomer) {
             // Update the existing customer record to reflect the new agent
             existingCustomer.agent = req.user.id;
-            
+
             // Add a note to the customer record about the takeover
             if (!existingCustomer.notes) {
                 existingCustomer.notes = [];
@@ -614,7 +642,7 @@ app.post('/api/leads/:id/take-over', authenticate, async (req, res) => {
 
             // Copy any new notes from the lead to the customer record
             const leadNotes = lead.notes || [];
-            const lastCustomerNoteTime = existingCustomer.notes.length > 0 
+            const lastCustomerNoteTime = existingCustomer.notes.length > 0
                 ? Math.max(...existingCustomer.notes.map(n => new Date(n.createdAt).getTime()))
                 : 0;
 
@@ -681,16 +709,16 @@ app.post('/api/leads/:id/take-over', authenticate, async (req, res) => {
 app.get('/api/dashboard/stats', authenticate, async (req, res) => {
     try {
         const filter = req.user.role === 'agent' ? { assignedTo: req.user.id } : {};
-        
+
         console.log(`[DASHBOARD STATS] User: ${req.user.username} | Role: ${req.user.role} | Using aggregation for efficient dashboard stats`);
-        
+
         // Use aggregation to get total count efficiently
         const totalCountResult = await Lead.aggregate([
             { $match: filter },
             { $count: "totalLeads" }
         ]);
         const totalLeads = totalCountResult.length > 0 ? totalCountResult[0].totalLeads : 0;
-        
+
         // Use aggregation to get status breakdown efficiently
         const statusBreakdown = await Lead.aggregate([
             { $match: filter },
@@ -701,7 +729,7 @@ app.get('/api/dashboard/stats', authenticate, async (req, res) => {
                 }
             }
         ]);
-        
+
         // Convert status breakdown to the expected format
         const statusCounts = {
             new: 0,
@@ -710,39 +738,39 @@ app.get('/api/dashboard/stats', authenticate, async (req, res) => {
             'Call Back Qualified': 0,
             'Call Back NOT Qualified': 0
         };
-        
+
         statusBreakdown.forEach(item => {
             if (statusCounts.hasOwnProperty(item._id)) {
                 statusCounts[item._id] = item.count;
             }
         });
-        
+
         // Get monthly trends using aggregation
         const now = new Date();
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(now.getMonth() - 5);
-        
+
         const monthlyTrends = await Lead.aggregate([
-            { 
-                $match: { 
+            {
+                $match: {
                     ...filter,
-                    createdAt: { $gte: sixMonthsAgo } 
-                } 
+                    createdAt: { $gte: sixMonthsAgo }
+                }
             },
             {
                 $group: {
-                    _id: { 
-                        year: { $year: "$createdAt" }, 
-                        month: { $month: "$createdAt" } 
+                    _id: {
+                        year: { $year: "$createdAt" },
+                        month: { $month: "$createdAt" }
                     },
                     count: { $sum: 1 }
                 }
             },
             { $sort: { "_id.year": 1, "_id.month": 1 } }
         ]);
-        
+
         console.log(`[DASHBOARD STATS] User: ${req.user.username} | Total: ${totalLeads} leads | Efficient aggregation used`);
-        
+
         res.json({
             totalLeads,
             statusBreakdown: statusCounts,
@@ -760,7 +788,7 @@ app.get('/api/users', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-        
+
         const query = req.query.role ? { role: req.query.role } : {};
         const users = await User.find(query).select('-passwordHash');
         res.json(users);
@@ -775,12 +803,12 @@ app.patch('/api/users/:id', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-        
+
         const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true }).select('-passwordHash');
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
-        
+
         res.json(user);
     } catch (error) {
         console.error('User update error:', error);
@@ -794,27 +822,27 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-        
+
         const { name, email, password, role } = req.body;
-        
+
         if (!name || !email) {
             return res.status(400).json({ message: 'Name and email are required' });
         }
-        
+
         const updateData = { name, email, role };
-        
+
         // If password is provided, hash it and include in update
         if (password) {
             const bcrypt = require('bcryptjs');
             updateData.passwordHash = await bcrypt.hash(password, 10);
         }
-        
+
         const user = await User.findByIdAndUpdate(req.params.id, updateData, { new: true }).select('-passwordHash');
-        
+
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
-        
+
         res.json(user);
     } catch (error) {
         console.error('User update error:', error);
@@ -828,18 +856,18 @@ app.delete('/api/users/:id', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-        
+
         // Prevent deletion of own account
         if (req.params.id === req.user.id) {
             return res.status(400).json({ message: 'Cannot delete your own account' });
         }
-        
+
         const user = await User.findByIdAndDelete(req.params.id);
-        
+
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
-        
+
         res.json({ message: 'User deleted successfully' });
     } catch (error) {
         console.error('User deletion error:', error);
@@ -853,22 +881,22 @@ app.post('/api/users/deactivate-all', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-        
+
         // Deactivate all users except the current admin
         const result = await User.updateMany(
-            { 
+            {
                 _id: { $ne: req.user.id }, // Exclude current user
                 status: 'active' // Only update active users
             },
-            { 
+            {
                 status: 'inactive',
                 updatedAt: new Date()
             }
         );
-        
+
         console.log(`Admin ${req.user.email} deactivated ${result.modifiedCount} users`);
-        
-        res.json({ 
+
+        res.json({
             message: `Successfully deactivated ${result.modifiedCount} user(s)`,
             deactivatedCount: result.modifiedCount
         });
@@ -894,13 +922,13 @@ app.post('/api/lead-fields', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-        
+
         const { name, label, type, options, required, order } = req.body;
-        
+
         if (!name || !label) {
             return res.status(400).json({ message: 'Name and label are required' });
         }
-        
+
         const field = new LeadField({
             name,
             label,
@@ -909,7 +937,7 @@ app.post('/api/lead-fields', authenticate, async (req, res) => {
             required: required || false,
             order: order || 0
         });
-        
+
         await field.save();
         res.status(201).json(field);
     } catch (error) {
@@ -927,12 +955,12 @@ app.put('/api/lead-fields/:id', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-        
+
         const field = await LeadField.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!field) {
             return res.status(404).json({ message: 'Field not found' });
         }
-        
+
         res.json(field);
     } catch (error) {
         console.error('Lead field update error:', error);
@@ -945,18 +973,18 @@ app.delete('/api/lead-fields/:id', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-        
+
         // Soft delete by setting isActive to false
         const field = await LeadField.findByIdAndUpdate(
-            req.params.id, 
-            { isActive: false }, 
+            req.params.id,
+            { isActive: false },
             { new: true }
         );
-        
+
         if (!field) {
             return res.status(404).json({ message: 'Field not found' });
         }
-        
+
         res.json({ message: 'Field deleted successfully' });
     } catch (error) {
         console.error('Lead field deletion error:', error);
@@ -968,7 +996,7 @@ app.delete('/api/lead-fields/:id', authenticate, async (req, res) => {
 app.get('/api/lead-lists', authenticate, async (req, res) => {
     try {
         let filter = { isActive: true };
-        
+
         // Allow filtering by isCustomerList
         if (req.query.isCustomerList !== undefined) {
             filter.isCustomerList = req.query.isCustomerList === 'true';
@@ -980,12 +1008,12 @@ app.get('/api/lead-lists', authenticate, async (req, res) => {
                 { isVisibleToUsers: true },
                 { visibleToSpecificAgents: req.user.id }
             ];
-        }        const lists = await LeadList.find(filter)
+        } const lists = await LeadList.find(filter)
             .populate('createdBy', 'name email')
             .populate('visibleToSpecificAgents', 'name email')
             .sort({ createdAt: -1 });
-          console.log(`[LEAD-LISTS API] User: ${req.user.username} (${req.user.role}) | Found ${lists.length} lists | Using aggregation for efficient counting...`);
-        
+        console.log(`[LEAD-LISTS API] User: ${req.user.username} (${req.user.role}) | Found ${lists.length} lists | Using aggregation for efficient counting...`);
+
         // Get all lead counts in a single aggregation query - OPTIMIZED!
         const leadCounts = await Lead.aggregate([
             {
@@ -995,7 +1023,7 @@ app.get('/api/lead-lists', authenticate, async (req, res) => {
                 }
             }
         ]);
-        
+
         // Create a map for O(1) lookup of counts
         const countMap = new Map();
         leadCounts.forEach(item => {
@@ -1003,16 +1031,16 @@ app.get('/api/lead-lists', authenticate, async (req, res) => {
                 countMap.set(item._id.toString(), item.count);
             }
         });
-        
+
         // Add counts to lists
         const listsWithCounts = lists.map(list => {
             const listObj = list.toObject();
             listObj.leadCount = countMap.get(list._id.toString()) || 0;
             return listObj;
         });
-        
+
         console.log(`[LEAD-LISTS API] User: ${req.user.username} | Optimized: 1 aggregation query instead of ${lists.length} separate queries`);
-        
+
         res.json(listsWithCounts);
     } catch (error) {
         console.error('Lead lists fetch error:', error);
@@ -1027,11 +1055,11 @@ app.post('/api/lead-lists', authenticate, async (req, res) => {
         }
 
         const { name, description, labels, isVisibleToUsers, visibleToSpecificAgents } = req.body;
-        
+
         if (!name) {
             return res.status(400).json({ message: 'List name is required' });
         }
-        
+
         const leadList = new LeadList({
             name,
             description: description || '',
@@ -1040,10 +1068,10 @@ app.post('/api/lead-lists', authenticate, async (req, res) => {
             visibleToSpecificAgents: visibleToSpecificAgents || [],
             createdBy: req.user.id
         });
-        
+
         await leadList.save();
         await leadList.populate('createdBy', 'name email');
-        
+
         res.status(201).json(leadList);
     } catch (error) {
         console.error('Lead list creation error:', error);
@@ -1053,14 +1081,15 @@ app.post('/api/lead-lists', authenticate, async (req, res) => {
 
 // Get specific lead list by ID
 app.get('/api/lead-lists/:id', authenticate, async (req, res) => {
-    try {        const leadList = await LeadList.findById(req.params.id)
+    try {
+        const leadList = await LeadList.findById(req.params.id)
             .populate('createdBy', 'name email')
             .populate('visibleToSpecificAgents', 'name email');
-        
+
         if (!leadList || !leadList.isActive) {
             return res.status(404).json({ message: 'Lead list not found' });
         }
-        
+
         res.json(leadList);
     } catch (error) {
         console.error('Lead list fetch error:', error);
@@ -1073,17 +1102,17 @@ app.put('/api/lead-lists/:id', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-          const leadList = await LeadList.findByIdAndUpdate(
-            req.params.id, 
-            req.body, 
+        const leadList = await LeadList.findByIdAndUpdate(
+            req.params.id,
+            req.body,
             { new: true }
         ).populate('createdBy', 'name email')
-        .populate('visibleToSpecificAgents', 'name email');
-        
+            .populate('visibleToSpecificAgents', 'name email');
+
         if (!leadList) {
             return res.status(404).json({ message: 'Lead list not found' });
         }
-        
+
         res.json(leadList);
     } catch (error) {
         console.error('Lead list update error:', error);
@@ -1096,32 +1125,32 @@ app.delete('/api/lead-lists/:id', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-        
+
         // Check if the lead list exists
         const leadList = await LeadList.findById(req.params.id);
         if (!leadList) {
             return res.status(404).json({ message: 'Lead list not found' });
         }
-        
+
         const { hard } = req.query; // Check if hard delete is requested
-        
+
         if (hard === 'true') {
             // Hard delete: remove the list and all associated leads
             // Delete all leads associated with this list
             await Lead.deleteMany({ leadList: req.params.id });
-            
+
             // Delete the list itself
             await LeadList.findByIdAndDelete(req.params.id);
-            
+
             res.json({ message: 'Lead list and associated leads deleted permanently' });
         } else {
             // Soft delete by setting isActive to false
             const updatedList = await LeadList.findByIdAndUpdate(
-                req.params.id, 
-                { isActive: false }, 
+                req.params.id,
+                { isActive: false },
                 { new: true }
             );
-            
+
             res.json({ message: 'Lead list deleted successfully' });
         }
     } catch (error) {
@@ -1136,36 +1165,36 @@ app.post('/api/lead-lists/:id/bulk-leads', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Admin access required' });
         }
-        
+
         const { leads } = req.body;
         const listId = req.params.id;
-        
+
         if (!leads || !Array.isArray(leads)) {
             return res.status(400).json({ message: 'Leads array is required' });
         }
-        
+
         // Verify the list exists
         const leadList = await LeadList.findById(listId);
         if (!leadList) {
             return res.status(404).json({ message: 'Lead list not found' });
         }
-        
+
         // Add leadList reference to each lead
         const leadsWithList = leads.map(lead => ({
             ...lead,
             leadList: listId,
             status: lead.status || 'new'
         }));
-        
+
         // Process leads in batches to avoid memory issues with large datasets
         const BATCH_SIZE = 100;
         let totalInserted = 0;
         const insertedLeads = [];
-        
+
         for (let i = 0; i < leadsWithList.length; i += BATCH_SIZE) {
             const batch = leadsWithList.slice(i, i + BATCH_SIZE);
             console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(leadsWithList.length / BATCH_SIZE)} (${batch.length} leads)`);
-            
+
             try {
                 const batchResult = await Lead.insertMany(batch);
                 insertedLeads.push(...batchResult);
@@ -1175,10 +1204,10 @@ app.post('/api/lead-lists/:id/bulk-leads', authenticate, async (req, res) => {
                 // Continue with next batch instead of failing completely
             }
         }
-        
+
         console.log(`Bulk insert completed: ${totalInserted}/${leadsWithList.length} leads inserted successfully`);
-        
-        res.json({ 
+
+        res.json({
             message: `Leads added successfully: ${totalInserted}/${leadsWithList.length} inserted`,
             inserted: totalInserted,
             total: leadsWithList.length,
@@ -1196,7 +1225,7 @@ app.get('/api/customers', authenticate, async (req, res) => {
         // For agents, show only their customers
         // For admins, show all customers if no filter specified
         const filter = req.user.role === 'agent' ? { agent: req.user.id } : {};
-        
+
         // Apply additional filters if provided
         if (req.query.agent) filter.agent = req.query.agent;
         if (req.query.status) filter.status = req.query.status;
@@ -1208,11 +1237,11 @@ app.get('/api/customers', authenticate, async (req, res) => {
                 { phone: searchRegex }
             ];
         }
-        
+
         const customers = await Customer.find(filter)
             .populate('notes.createdBy', 'name')
             .sort({ createdAt: -1 });
-        
+
         // Convert customFields Map to Object for each customer
         const customersResponse = customers.map(customer => {
             const customerObj = customer.toObject();
@@ -1221,7 +1250,7 @@ app.get('/api/customers', authenticate, async (req, res) => {
             }
             return customerObj;
         });
-        
+
         res.json(customersResponse);
     } catch (error) {
         console.error('Customers fetch error:', error);
@@ -1233,30 +1262,30 @@ app.get('/api/customers', authenticate, async (req, res) => {
 app.post('/api/customers/:id/notes', authenticate, async (req, res) => {
     try {
         const { status, note } = req.body;
-        
+
         // Find the customer
         const customer = await Customer.findById(req.params.id);
         if (!customer) {
             return res.status(404).json({ message: 'Customer not found' });
         }
-        
+
         // Check if customer belongs to the current user (agents only)
         if (req.user.role === 'agent' && customer.agent.toString() !== req.user.id) {
             return res.status(403).json({ message: 'You can only update your own customers' });
         }
-        
+
         // Update status if provided
         if (status) {
             customer.status = status;
         }
-        
+
         // Add note if provided
         if (note && note.content) {
             // If notes array doesn't exist, initialize it
             if (!customer.notes) {
                 customer.notes = [];
             }
-            
+
             // Add the note with current timestamp
             customer.notes.push({
                 content: note.content,
@@ -1264,17 +1293,17 @@ app.post('/api/customers/:id/notes', authenticate, async (req, res) => {
                 createdBy: note.createdBy || req.user.id
             });
         }
-          await customer.save();
-        
+        await customer.save();
+
         // Populate the notes with user information
         await customer.populate('notes.createdBy', 'name');
-        
+
         // Convert customFields for JSON response
         const customerResponse = customer.toObject();
         if (customerResponse.customFields) {
             customerResponse.customFields = Object.fromEntries(customerResponse.customFields);
         }
-        
+
         res.status(200).json(customerResponse);
     } catch (error) {
         console.error('Error adding note to customer:', error);
@@ -1319,13 +1348,14 @@ app.post('/api/customers/:id/release', authenticate, async (req, res) => {
             if (originalLeadList && originalLeadList.isActive) {
                 targetLeadList = originalLeadList;
                 targetListName = originalLeadList.name;
-            }        }        // If no original list or it's inactive, use the "Users with no list" list
+            }
+        }        // If no original list or it's inactive, use the "Users with no list" list
         if (!targetLeadList) {
             const defaultList = await ensureUsersWithNoListExists();
             if (!defaultList) {
                 return res.status(500).json({ message: 'Failed to create Users with no list' });
             }
-            
+
             targetLeadList = defaultList;
             targetListName = defaultList.name;
         }
@@ -1336,7 +1366,7 @@ app.post('/api/customers/:id/release', authenticate, async (req, res) => {
             // Restore the original lead
             originalLead.assignedTo = null; // Release it to general pool
             originalLead.status = customer.status || 'new';
-            
+
             // Add note about customer release
             if (!originalLead.notes) {
                 originalLead.notes = [];
@@ -1366,20 +1396,20 @@ app.post('/api/customers/:id/release', authenticate, async (req, res) => {
                 assignedTo: null, // Released to general pool
                 customFields: customer.customFields || new Map(),
                 leadList: targetLeadList._id,
-                notes: [                    {
-                        content: `Lead recreated from customer release. Added to "${targetListName}" list.`,
-                        createdAt: new Date(),
-                        createdBy: req.user.id
-                    },
-                    // Copy only customer notes that were created AFTER the customer was created
-                    // to avoid duplicating notes that were originally copied from the lead
-                    ...(customer.notes ? customer.notes.filter(note => 
-                        new Date(note.createdAt) >= customer.createdAt
-                    ).map(note => ({
-                        content: note.content,
-                        createdAt: note.createdAt,
-                        createdBy: note.createdBy
-                    })) : [])
+                notes: [{
+                    content: `Lead recreated from customer release. Added to "${targetListName}" list.`,
+                    createdAt: new Date(),
+                    createdBy: req.user.id
+                },
+                // Copy only customer notes that were created AFTER the customer was created
+                // to avoid duplicating notes that were originally copied from the lead
+                ...(customer.notes ? customer.notes.filter(note =>
+                    new Date(note.createdAt) >= customer.createdAt
+                ).map(note => ({
+                    content: note.content,
+                    createdAt: note.createdAt,
+                    createdBy: note.createdBy
+                })) : [])
                 ]
             });
 
@@ -1393,7 +1423,7 @@ app.post('/api/customers/:id/release', authenticate, async (req, res) => {
         const leadResponse = newLead.toObject();
         if (leadResponse.customFields) {
             leadResponse.customFields = Object.fromEntries(leadResponse.customFields);
-        }        res.status(200).json({
+        } res.status(200).json({
             lead: leadResponse,
             targetList: targetListName,
             message: `Customer successfully released back to leads pool in "${targetListName}" list`
@@ -1481,21 +1511,21 @@ app.post('/api/customers/:id/move-to-depositors', authenticate, async (req, res)
 app.get('/api/depositors', authenticate, async (req, res) => {
     try {
         const { page = 1, limit = 20, status, agentId, search } = req.query;
-        
+
         // Build filter object
         const filter = {};
-          // Role-based filtering
+        // Role-based filtering
         if (req.user.role === 'agent') {
             filter.agent = req.user.id;
         } else if (agentId && req.user.role === 'admin') {
             filter.agent = agentId;
         }
-        
+
         // Status filtering
         if (status) {
             filter.status = status;
         }
-          // Search filtering
+        // Search filtering
         if (search) {
             filter.$or = [
                 { fullName: { $regex: search, $options: 'i' } },
@@ -1503,16 +1533,16 @@ app.get('/api/depositors', authenticate, async (req, res) => {
                 { phone: { $regex: search, $options: 'i' } },
                 { company: { $regex: search, $options: 'i' } }
             ];
-        }        const depositors = await Depositor.find(filter)
+        } const depositors = await Depositor.find(filter)
             .populate('agent', 'name email')
             .populate('notes.createdBy', 'name')
             .sort({ createdAt: -1 })
             .limit(limit * 1)
             .skip((page - 1) * limit);
-        
+
         // Get total count for pagination
         const total = await Depositor.countDocuments(filter);
-        
+
         // Convert customFields for response
         const depositorsResponse = depositors.map(depositor => {
             const depositorObj = depositor.toObject();
@@ -1521,7 +1551,7 @@ app.get('/api/depositors', authenticate, async (req, res) => {
             }
             return depositorObj;
         });
-        
+
         res.status(200).json({
             depositors: depositorsResponse,
             pagination: {
@@ -1538,24 +1568,25 @@ app.get('/api/depositors', authenticate, async (req, res) => {
 
 // Get a single depositor by ID
 app.get('/api/depositors/:id', authenticate, async (req, res) => {
-    try {        const depositor = await Depositor.findById(req.params.id)
+    try {
+        const depositor = await Depositor.findById(req.params.id)
             .populate('agent', 'name email')
             .populate('notes.createdBy', 'name');
-        
+
         if (!depositor) {
             return res.status(404).json({ message: 'Depositor not found' });
         }
-          // Check permissions - agents can only view their own depositors
+        // Check permissions - agents can only view their own depositors
         if (req.user.role === 'agent' && depositor.agent._id.toString() !== req.user.id) {
             return res.status(403).json({ message: 'Access denied' });
         }
-        
+
         // Convert customFields for response
         const depositorResponse = depositor.toObject();
         if (depositorResponse.customFields) {
             depositorResponse.customFields = Object.fromEntries(depositorResponse.customFields);
         }
-        
+
         res.status(200).json({ depositor: depositorResponse });
     } catch (error) {
         console.error('Error fetching depositor:', error);
@@ -1567,28 +1598,28 @@ app.get('/api/depositors/:id', authenticate, async (req, res) => {
 app.post('/api/depositors/:id/notes', authenticate, async (req, res) => {
     try {
         const { status, note } = req.body;
-        
+
         const depositor = await Depositor.findById(req.params.id);
         if (!depositor) {
             return res.status(404).json({ message: 'Depositor not found' });
         }
-          // Check permissions - agents can only add notes to their own depositors
+        // Check permissions - agents can only add notes to their own depositors
         if (req.user.role === 'agent' && depositor.agent.toString() !== req.user.id) {
             return res.status(403).json({ message: 'You can only add notes to your own depositors' });
         }
-        
+
         // Update status if provided
         if (status) {
             depositor.status = status;
         }
-        
+
         // Add note if provided
         if (note && note.content) {
             // If notes array doesn't exist, initialize it
             if (!depositor.notes) {
                 depositor.notes = [];
             }
-            
+
             // Add the note with current timestamp
             depositor.notes.push({
                 content: note.content,
@@ -1596,18 +1627,18 @@ app.post('/api/depositors/:id/notes', authenticate, async (req, res) => {
                 createdBy: note.createdBy || req.user._id
             });
         }
-          await depositor.save();
-        
+        await depositor.save();
+
         // Populate the depositor with agent and notes user info for response
         await depositor.populate('agent', 'name email');
         await depositor.populate('notes.createdBy', 'name');
-        
+
         // Convert customFields for response
         const depositorResponse = depositor.toObject();
         if (depositorResponse.customFields) {
             depositorResponse.customFields = Object.fromEntries(depositorResponse.customFields);
         }
-        
+
         res.status(200).json(depositorResponse);
     } catch (error) {
         console.error('Error adding note to depositor:', error);
@@ -1619,51 +1650,52 @@ app.post('/api/depositors/:id/notes', authenticate, async (req, res) => {
 app.patch('/api/depositors/:id/status', authenticate, async (req, res) => {
     try {
         const { status } = req.body;
-        
+
         if (!status) {
             return res.status(400).json({ message: 'Status is required' });
         }
-          const validStatuses = ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'];
+        const validStatuses = ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ message: 'Invalid status' });
         }
-        
-        const depositor = await Depositor.findById(req.params.id);        if (!depositor) {
+
+        const depositor = await Depositor.findById(req.params.id); if (!depositor) {
             return res.status(404).json({ message: 'Depositor not found' });
         }
-        
+
         // Check permissions - agents can only update their own depositors
         if (req.user.role === 'agent' && depositor.agent.toString() !== req.user.id) {
             return res.status(403).json({ message: 'You can only update your own depositors' });
         }
-        
+
         const oldStatus = depositor.status;
         depositor.status = status;
-        
+
         // Add a note about the status change
         if (!depositor.notes) {
             depositor.notes = [];
         }
-        
+
         depositor.notes.push({
             content: `Status changed from "${oldStatus}" to "${status}" by ${req.user.name}`,
             createdAt: new Date(),
-            createdBy: req.user.id        });
-        
+            createdBy: req.user.id
+        });
+
         await depositor.save();
-        
+
         // Populate the depositor with agent info for response
         await depositor.populate('agent', 'name email');
-        
+
         // Convert customFields for response
         const depositorResponse = depositor.toObject();
         if (depositorResponse.customFields) {
             depositorResponse.customFields = Object.fromEntries(depositorResponse.customFields);
         }
-        
-        res.status(200).json({ 
+
+        res.status(200).json({
             depositor: depositorResponse,
-            message: 'Status updated successfully' 
+            message: 'Status updated successfully'
         });
     } catch (error) {
         console.error('Error updating depositor status:', error);
@@ -1678,14 +1710,14 @@ app.delete('/api/depositors/:id', authenticate, async (req, res) => {
         if (req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Only admins can delete depositors' });
         }
-        
+
         const depositor = await Depositor.findById(req.params.id);
         if (!depositor) {
             return res.status(404).json({ message: 'Depositor not found' });
         }
-        
+
         await Depositor.findByIdAndDelete(req.params.id);
-        
+
         res.status(200).json({ message: 'Depositor deleted successfully' });
     } catch (error) {
         console.error('Error deleting depositor:', error);
@@ -1700,17 +1732,17 @@ app.post('/api/depositors/:id/release-to-customers', authenticate, async (req, r
         if (req.user.role !== 'agent') {
             return res.status(403).json({ message: 'Only agents can release depositors' });
         }
-        
+
         const depositor = await Depositor.findById(req.params.id);
         if (!depositor) {
             return res.status(404).json({ message: 'Depositor not found' });
         }
-        
+
         // Check permissions - agents can only release their own depositors
         if (depositor.agent.toString() !== req.user.id) {
             return res.status(403).json({ message: 'You can only release your own depositors' });
         }
-          // Create new customer from depositor data
+        // Create new customer from depositor data
         const newCustomer = new Customer({
             fullName: depositor.fullName,
             email: depositor.email,
@@ -1724,7 +1756,7 @@ app.post('/api/depositors/:id/release-to-customers', authenticate, async (req, r
             originalLead: depositor.originalLead,
             originalLeadList: depositor.originalLeadList,
             originalListName: depositor.originalListName,
-            originalListLabels: depositor.originalListLabels,            notes: [
+            originalListLabels: depositor.originalListLabels, notes: [
                 ...(depositor.notes || []).map(note => ({
                     content: note.content,
                     createdAt: note.createdAt,
@@ -1737,18 +1769,18 @@ app.post('/api/depositors/:id/release-to-customers', authenticate, async (req, r
                 }
             ]
         });
-        
+
         await newCustomer.save();
-        
+
         // Delete the depositor record
         await Depositor.findByIdAndDelete(req.params.id);
-        
+
         // Convert customer customFields for response
         const customerResponse = newCustomer.toObject();
         if (customerResponse.customFields) {
             customerResponse.customFields = Object.fromEntries(customerResponse.customFields);
         }
-        
+
         res.status(200).json({
             customer: customerResponse,
             message: 'Depositor successfully released back to customers list'
@@ -1766,17 +1798,17 @@ app.post('/api/depositors/:id/release', authenticate, async (req, res) => {
         if (req.user.role !== 'agent') {
             return res.status(403).json({ message: 'Only agents can release depositors' });
         }
-        
+
         const depositor = await Depositor.findById(req.params.id);
         if (!depositor) {
             return res.status(404).json({ message: 'Depositor not found' });
         }
-        
+
         // Check permissions - agents can only release their own depositors
         if (depositor.agent.toString() !== req.user.id) {
             return res.status(403).json({ message: 'You can only release your own depositors' });
         }
-        
+
         // Find the original lead to restore it
         let originalLead = null;
         if (depositor.originalLead) {
@@ -1793,7 +1825,8 @@ app.post('/api/depositors/:id/release', authenticate, async (req, res) => {
             if (originalLeadList && originalLeadList.isActive) {
                 targetLeadList = originalLeadList;
                 targetListName = originalLeadList.name;
-            }        }
+            }
+        }
 
         // If no original list or it's inactive, use the "Users with no list" list
         if (!targetLeadList) {
@@ -1801,7 +1834,7 @@ app.post('/api/depositors/:id/release', authenticate, async (req, res) => {
             if (!defaultList) {
                 return res.status(500).json({ message: 'Failed to create Users with no list' });
             }
-            
+
             targetLeadList = defaultList;
             targetListName = defaultList.name;
         }
@@ -1812,7 +1845,7 @@ app.post('/api/depositors/:id/release', authenticate, async (req, res) => {
             // Restore the original lead
             originalLead.assignedTo = null; // Release it to general pool
             originalLead.status = depositor.status || 'new';
-            
+
             // Add note about depositor release            // Replace the lead's notes array with depositor notes plus release note
             originalLead.notes = [
                 ...(depositor.notes || []).map(note => ({
@@ -1838,7 +1871,7 @@ app.post('/api/depositors/:id/release', authenticate, async (req, res) => {
                 status: depositor.status || 'new',
                 assignedTo: null, // Released to general pool
                 customFields: depositor.customFields || new Map(),
-                leadList: targetLeadList._id,                notes: [
+                leadList: targetLeadList._id, notes: [
                     {
                         content: `Lead recreated from depositor release. Added to "${targetListName}" list.`,
                         createdAt: new Date(),
@@ -1946,11 +1979,11 @@ app.post('/api/leads/:id/transfer', authenticate, async (req, res) => {
 app.get('/api/leads/counts', authenticate, async (req, res) => {
     try {
         // Get all active lead lists visible to the user
-        let leadListFilter = { 
-            isActive: true, 
-            isCustomerList: { $ne: true } 
+        let leadListFilter = {
+            isActive: true,
+            isCustomerList: { $ne: true }
         };
-        
+
         // For non-admin users, only include lists that are visible
         if (req.user.role !== 'admin') {
             leadListFilter.$or = [
@@ -1958,20 +1991,20 @@ app.get('/api/leads/counts', authenticate, async (req, res) => {
                 { visibleToSpecificAgents: req.user.id }
             ];
         }
-          const leadLists = await LeadList.find(leadListFilter).select('_id name');
+        const leadLists = await LeadList.find(leadListFilter).select('_id name');
         const listIds = leadLists.map(list => list._id);
-          console.log(`[DEBUG] Found ${leadLists.length} lead lists:`, leadLists.map(l => ({ id: l._id, name: l.name })));
-        
+        console.log(`[DEBUG] Found ${leadLists.length} lead lists:`, leadLists.map(l => ({ id: l._id, name: l.name })));
+
         // Debug: Check a few lead documents to see their structure
         const sampleLeads = await Lead.find({}).limit(3).select('leadList');
         console.log(`[DEBUG] Sample leads with leadList field:`, sampleLeads);
-        
+
         // Use MongoDB aggregation to get counts for all lists in one query
         const counts = await Lead.aggregate([
-            { 
-                $match: { 
-                    leadList: { $in: listIds } 
-                } 
+            {
+                $match: {
+                    leadList: { $in: listIds }
+                }
             },
             {
                 $group: {
@@ -1980,27 +2013,27 @@ app.get('/api/leads/counts', authenticate, async (req, res) => {
                 }
             }
         ]);
-        
+
         console.log(`[DEBUG] Aggregation result:`, counts);
-        
+
         // Create a map of listId -> count
         const countMap = {};
         counts.forEach(item => {
             countMap[item._id.toString()] = item.count;
         });
-        
+
         console.log(`[DEBUG] Count map:`, countMap);
-          // Return counts for each list (including 0 for lists with no leads)
+        // Return counts for each list (including 0 for lists with no leads)
         const result = leadLists.map(list => ({
             listId: list._id,
             name: list.name,
             count: countMap[list._id.toString()] || 0
         }));
-        
+
         console.log(`[DEBUG] Final result being sent:`, result);
-        
+
         console.log(`[LEADS COUNTS] User: ${req.user.username} | Retrieved counts for ${result.length} lists in single query`);
-        
+
         res.json(result);
     } catch (error) {
         console.error('Lead counts fetch error:', error);
@@ -2032,10 +2065,10 @@ app.get('/api/clock/today', authenticate, async (req, res) => {
     try {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
+
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
-        
+
         let entry = await TimeEntry.findOne({
             agent: req.user.id,
             date: {
@@ -2043,7 +2076,7 @@ app.get('/api/clock/today', authenticate, async (req, res) => {
                 $lt: tomorrow
             }
         });
-        
+
         res.json({ entry });
     } catch (error) {
         console.error('Get today status error:', error);
@@ -2056,10 +2089,10 @@ app.post('/api/clock/in', authenticate, async (req, res) => {
     try {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
+
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
-        
+
         // Check if already clocked in today
         let entry = await TimeEntry.findOne({
             agent: req.user.id,
@@ -2068,17 +2101,17 @@ app.post('/api/clock/in', authenticate, async (req, res) => {
                 $lt: tomorrow
             }
         });
-        
+
         if (entry && entry.status === 'clocked-in') {
             return res.status(400).json({ message: 'Already clocked in today' });
         }
-        
+
         const now = new Date();
-        
+
         // Get user's current hourly rate (we'll store a default rate with user)
         const user = await User.findById(req.user.id);
         const defaultRate = user.hourlyRate || 0;
-        
+
         if (entry) {
             // Update existing entry
             entry.clockIn = now;
@@ -2097,7 +2130,7 @@ app.post('/api/clock/in', authenticate, async (req, res) => {
                 hourlyRate: defaultRate
             });
         }
-        
+
         await entry.save();
         res.json({ message: 'Clocked in successfully', entry });
     } catch (error) {
@@ -2111,10 +2144,10 @@ app.post('/api/clock/out', authenticate, async (req, res) => {
     try {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
+
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
-        
+
         const entry = await TimeEntry.findOne({
             agent: req.user.id,
             date: {
@@ -2123,17 +2156,17 @@ app.post('/api/clock/out', authenticate, async (req, res) => {
             },
             status: 'clocked-in'
         });
-        
+
         if (!entry) {
             return res.status(400).json({ message: 'Not currently clocked in' });
         }
-        
+
         entry.clockOut = new Date();
         entry.status = 'clocked-out';
-        
+
         // Calculate hours and pay (done by pre-save middleware)
         await entry.save();
-        
+
         res.json({ message: 'Clocked out successfully', entry });
     } catch (error) {
         console.error('Clock out error:', error);
@@ -2149,7 +2182,7 @@ app.get('/api/clock/entries', authenticate, async (req, res) => {
             .sort({ date: -1 })
             .limit(limit)
             .populate('agent', 'name');
-            
+
         res.json({ entries });
     } catch (error) {
         console.error('Get entries error:', error);
@@ -2162,21 +2195,21 @@ app.get('/api/clock/entries', authenticate, async (req, res) => {
 app.post('/api/clock/rate', authenticate, requireRole('admin'), async (req, res) => {
     try {
         const { agentId, hourlyRate } = req.body;
-        
+
         if (!agentId || hourlyRate === undefined) {
             return res.status(400).json({ message: 'Agent ID and hourly rate are required' });
         }
-        
+
         // Update user's default hourly rate
         await User.findByIdAndUpdate(agentId, { hourlyRate: hourlyRate });
-        
+
         // Update today's entry if exists and not clocked out
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
+
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
-        
+
         await TimeEntry.updateOne(
             {
                 agent: agentId,
@@ -2184,7 +2217,7 @@ app.post('/api/clock/rate', authenticate, requireRole('admin'), async (req, res)
             },
             { hourlyRate: hourlyRate }
         );
-        
+
         res.json({ message: 'Hourly rate updated successfully' });
     } catch (error) {
         console.error('Update rate error:', error);
@@ -2196,35 +2229,35 @@ app.post('/api/clock/rate', authenticate, requireRole('admin'), async (req, res)
 app.post('/api/clock/manual', authenticate, requireRole('admin'), async (req, res) => {
     try {
         const { agentId, date, clockIn, clockOut, hourlyRate, notes } = req.body;
-        
+
         if (!agentId || !date || !clockIn || !clockOut || hourlyRate === undefined) {
             return res.status(400).json({ message: 'All fields are required' });
         }
-        
+
         const entryDate = new Date(date);
         entryDate.setHours(0, 0, 0, 0);
-        
+
         const tomorrow = new Date(entryDate);
         tomorrow.setDate(tomorrow.getDate() + 1);
-        
+
         // Check if entry already exists for this date
         const existingEntry = await TimeEntry.findOne({
             agent: agentId,
             date: { $gte: entryDate, $lt: tomorrow }
         });
-        
+
         if (existingEntry) {
             return res.status(400).json({ message: 'Entry already exists for this date' });
         }
-        
+
         // Create date objects for clock in/out times
         const clockInTime = new Date(date + 'T' + clockIn);
         const clockOutTime = new Date(date + 'T' + clockOut);
-        
+
         if (clockOutTime <= clockInTime) {
             return res.status(400).json({ message: 'Clock out time must be after clock in time' });
         }
-        
+
         const entry = new TimeEntry({
             agent: agentId,
             date: entryDate,
@@ -2236,7 +2269,7 @@ app.post('/api/clock/manual', authenticate, requireRole('admin'), async (req, re
             notes: notes || '',
             createdBy: req.user.id
         });
-        
+
         await entry.save();
         res.json({ message: 'Manual entry added successfully', entry });
     } catch (error) {
@@ -2249,20 +2282,20 @@ app.post('/api/clock/manual', authenticate, requireRole('admin'), async (req, re
 app.get('/api/clock/calendar', authenticate, async (req, res) => {
     try {
         const { year, month, agentId } = req.query;
-        
+
         if (!year || !month) {
             return res.status(400).json({ message: 'Year and month are required' });
         }
-        
+
         // Create date range for the month
         const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
         const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59, 999);
-        
+
         // Build query
         let query = {
             date: { $gte: startDate, $lte: endDate }
         };
-        
+
         // Add agent filter
         if (agentId) {
             query.agent = agentId;
@@ -2271,11 +2304,11 @@ app.get('/api/clock/calendar', authenticate, async (req, res) => {
             query.agent = req.user.id;
         }
         // Admins without agentId filter see all entries
-        
+
         const entries = await TimeEntry.find(query)
             .populate('agent', 'name')
             .sort({ date: 1 });
-            
+
         res.json({ entries });
     } catch (error) {
         console.error('Get calendar data error:', error);
@@ -2299,9 +2332,9 @@ const PORT = process.env.PORT || 5000;
 // Initialize system lists on startup
 mongoose.connection.once('open', async () => {
     console.log('MongoDB connected successfully');
-      // Ensure system lists exist
+    // Ensure system lists exist
     await ensureUsersWithNoListExists();
-    
+
     console.log('System initialization complete');
 });
 
