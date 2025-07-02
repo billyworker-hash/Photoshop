@@ -4,6 +4,7 @@ class UploadManager {
         this.apiManager = apiManager;
         this.selectedListId = null;
         this.selectedList = null; // Store the selected list object with its labels
+        this.createLabelIndex = 0;
 
         // Pagination properties for leads - now server-side pagination
         this.currentPage = 1;
@@ -501,64 +502,60 @@ class UploadManager {
         if (document.getElementById('createListModal')) return;
 
         const modalHtml = `
-            <div class="modal fade" id="createListModal" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Create New Lead List</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <form id="createListForm" onsubmit="event.preventDefault(); window.uploadManager.handleCreateList(event);">
-                            <div class="modal-body">
-                                <div class="mb-3">
-                                    <label class="form-label">List Name *</label>
-                                    <input type="text" class="form-control" name="name" required 
-                                           placeholder="e.g., leads2025, Q1 Prospects">
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Description</label>
-                                    <textarea class="form-control" name="description" rows="3" 
-                                              placeholder="Optional description for this lead list"></textarea>
-                                </div>                                <div class="mb-3">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="isVisibleToUsers" id="create-list-visible" checked>
-                                        <label class="form-check-label" for="create-list-visible">
-                                            <strong>Visible to All Agents</strong>
-                                        </label>
-                                        <div class="form-text">When checked, all agents can see this list. When unchecked, you can choose specific agents.</div>
-                                    </div>
-                                </div>
-                                
-                                <div class="mb-3" id="specific-agents-section" style="display: none;">
-                                    <label class="form-label">Select Specific Agents</label>
-                                    <div id="agents-selection" class="border rounded p-3">
-                                        <!-- Agent checkboxes will be loaded here -->
-                                    </div>
-                                    <div class="form-text">Choose which agents can see this list when not visible to all agents.</div>
-                                </div>
-                                
-                                <hr>
-                                <h6>Custom Labels for this List</h6>
-                                <p class="text-muted">Define custom fields specific to this lead list.</p>
-                                
-                                <div id="custom-labels-container">
-                                    <!-- Custom labels will be added here -->
-                                </div>
-                                
-                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="window.uploadManager.addCustomLabel()">
-                                    <i class="bi bi-plus me-1"></i> Add Custom Label
-                                </button>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="submit" class="btn btn-primary">Create List</button>
-                            </div>
-                        </form>
-                        
-                    </div>
+    <div class="modal fade" id="createListModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Lead List</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
+                <form id="createListForm" onsubmit="event.preventDefault(); window.uploadManager.handleCreateList(event);">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">List Name *</label>
+                            <input type="text" class="form-control" name="name" required 
+                                   placeholder="e.g., leads2025, Q1 Prospects">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" name="description" rows="3" 
+                                      placeholder="Optional description for this lead list"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="isVisibleToUsers" id="create-list-visible" checked>
+                                <label class="form-check-label" for="create-list-visible">
+                                    <strong>Visible to All Agents</strong>
+                                </label>
+                                <div class="form-text">When checked, all agents can see this list. When unchecked, you can choose specific agents.</div>
+                            </div>
+                        </div>
+                        <div class="mb-3" id="specific-agents-section" style="display: none;">
+                            <label class="form-label">Select Specific Agents</label>
+                            <div id="agents-selection" class="border rounded p-3">
+                                <!-- Agent checkboxes will be loaded here -->
+                            </div>
+                            <div class="form-text">Choose which agents can see this list when not visible to all agents.</div>
+                        </div>
+                        <hr>
+                        <h6>Custom Labels for this List</h6>
+                        <p class="text-muted">Define custom fields specific to this lead list.</p>
+                        <div id="create-labels-container">
+                            <!-- Custom labels will be added here -->
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="window.uploadManager.addCustomLabelToCreateModal()">
+                            <i class="bi bi-plus me-1"></i> Add Custom Label
+                        </button>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create List</button>
+                    </div>
+                </form>
             </div>
-        `;
+        </div>
+    </div>
+`;
 
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }// Create Bulk Add Modal
@@ -670,58 +667,61 @@ class UploadManager {
     }
 
     // Add custom label specifically for create list modal
-    addCustomLabelToCreateModal(labelIndex) {
+    addCustomLabelToCreateModal() {
         const container = document.getElementById('create-labels-container');
         if (!container) return;
 
+        const labelIndex = this.createLabelIndex; // Always use the incrementing index
+        this.createLabelIndex++; // Increment for next label
+
         const labelHtml = `
-            <div class="custom-label-row mb-3 p-3 border rounded">
-                <div class="row">
-                    <div class="col-md-4">
-                        <label class="form-label">Field Name</label>
-                        <input type="text" class="form-control" name="labels[${labelIndex}][name]" 
-                               placeholder="e.g., companySize" required>
-                        <small class="text-muted">Internal field name (no spaces)</small>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Display Label</label>
-                        <input type="text" class="form-control" name="labels[${labelIndex}][label]" 
-                               placeholder="e.g., Company Size" required>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Field Type</label>
-                        <select class="form-select" name="labels[${labelIndex}][type]">
-                            <option value="text">Text</option>
-                            <option value="number">Number</option>
-                            <option value="email">Email</option>
-                            <option value="phone">Phone</option>
-                            <option value="select">Select</option>
-                            <option value="textarea">Textarea</option>
-                        </select>
-                    </div>
-                    <div class="col-md-1">
-                        <label class="form-label">&nbsp;</label>
-                        <button type="button" class="btn btn-sm btn-outline-danger d-block" 
-                                onclick="this.closest('.custom-label-row').remove()">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
+        <div class="custom-label-row mb-3 p-3 border rounded">
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-label">Field Name</label>
+                    <input type="text" class="form-control" name="labels[${labelIndex}][name]" 
+                           placeholder="e.g., companySize" required>
+                    <small class="text-muted">Internal field name (no spaces)</small>
                 </div>
-                <div class="row mt-2">
-                    <div class="col-md-6">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="labels[${labelIndex}][required]" value="true">
-                            <label class="form-check-label">Required field</label>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <input type="text" class="form-control" name="labels[${labelIndex}][options]" 
-                               placeholder="Options (comma separated)" style="display: none;">
-                        <small class="text-muted" style="display: none;">For select fields only</small>
-                    </div>
+                <div class="col-md-4">
+                    <label class="form-label">Display Label</label>
+                    <input type="text" class="form-control" name="labels[${labelIndex}][label]" 
+                           placeholder="e.g., Company Size" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Field Type</label>
+                    <select class="form-select" name="labels[${labelIndex}][type]">
+                        <option value="text">Text</option>
+                        <option value="number">Number</option>
+                        <option value="email">Email</option>
+                        <option value="phone">Phone</option>
+                        <option value="select">Select</option>
+                        <option value="textarea">Textarea</option>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="button" class="btn btn-sm btn-outline-danger d-block" 
+                            onclick="this.closest('.custom-label-row').remove()">
+                        <i class="bi bi-trash"></i>
+                    </button>
                 </div>
             </div>
-        `;
+            <div class="row mt-2">
+                <div class="col-md-6">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="labels[${labelIndex}][required]" value="true">
+                        <label class="form-check-label">Required field</label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <input type="text" class="form-control" name="labels[${labelIndex}][options]" 
+                           placeholder="Options (comma separated)" style="display: none;">
+                    <small class="text-muted" style="display: none;">For select fields only</small>
+                </div>
+            </div>
+        </div>
+    `;
 
         container.insertAdjacentHTML('beforeend', labelHtml);
 
@@ -745,12 +745,11 @@ class UploadManager {
 
     // Add default labels to create form
     addDefaultLabels() {
-        // For create list modal, use the correct container ID
         const container = document.getElementById('create-labels-container');
         if (!container) return;
 
-        // Clear any existing labels
         container.innerHTML = '';
+        this.createLabelIndex = 0; // Reset index when opening modal
 
         const defaultLabels = [
             { name: 'firstName', label: 'First Name', type: 'text', required: true },
@@ -763,17 +762,19 @@ class UploadManager {
             { name: 'brand', label: 'Brand', type: 'text' }
         ];
 
-        defaultLabels.forEach((defaultLabel, index) => {
-            this.addCustomLabelToCreateModal(index);
+        defaultLabels.forEach((defaultLabel) => {
+            const labelIndex = this.createLabelIndex; // Store before increment
+            this.addCustomLabelToCreateModal();
             const lastRow = container.lastElementChild;
 
-            lastRow.querySelector(`input[name="labels[${index}][name]"]`).value = defaultLabel.name;
-            lastRow.querySelector(`input[name="labels[${index}][label]"]`).value = defaultLabel.label;
-            lastRow.querySelector(`select[name="labels[${index}][type]"]`).value = defaultLabel.type;
+            lastRow.querySelector(`input[name="labels[${labelIndex}][name]"]`).value = defaultLabel.name;
+            lastRow.querySelector(`input[name="labels[${labelIndex}][label]"]`).value = defaultLabel.label;
+            lastRow.querySelector(`select[name="labels[${labelIndex}][type]"]`).value = defaultLabel.type;
 
             if (defaultLabel.required) {
-                lastRow.querySelector(`input[name="labels[${index}][required]"]`).checked = true;
+                lastRow.querySelector(`input[name="labels[${labelIndex}][required]"]`).checked = true;
             }
+            // this.createLabelIndex++; // Do NOT increment here, it's already incremented in addCustomLabelToCreateModal
         });
     }
 
@@ -2020,7 +2021,31 @@ class UploadManager {
     }
 
     addEditCustomLabel() {
-        if (!this.selectedList.labels) this.selectedList.labels = [];
+        // Sync current UI values to this.selectedList.labels before adding new
+        const container = document.getElementById('edit-custom-labels-container');
+        if (container) {
+            const updatedLabels = [];
+            const rows = container.querySelectorAll('.row.g-2.align-items-center');
+            rows.forEach((row, idx) => {
+                const name = row.querySelector(`input[name="label_name_${idx}"]`)?.value.trim() || '';
+                const label = row.querySelector(`input[name="label_label_${idx}"]`)?.value.trim() || '';
+                const type = row.querySelector(`select[name="label_type_${idx}"]`)?.value || 'text';
+                const required = row.querySelector(`input[name="label_required_${idx}"]`)?.checked || false;
+                let options = [];
+                if (type === 'select') {
+                    const optionsInput = container.querySelector(`input[name="label_options_${idx}"]`);
+                    options = optionsInput ? optionsInput.value.split(',').map(opt => opt.trim()).filter(opt => opt) : [];
+                }
+                if (name && label) {
+                    updatedLabels.push({ name, label, type, required, options });
+                } else if (name || label) {
+                    // If user started typing but didn't finish, still keep the row
+                    updatedLabels.push({ name, label, type, required, options });
+                }
+            });
+            this.selectedList.labels = updatedLabels;
+        }
+        // Now add the new blank label
         this.selectedList.labels.push({ name: '', label: '', type: 'text', required: false, options: [] });
         this.renderEditCustomLabels();
     }
