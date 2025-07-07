@@ -388,23 +388,66 @@
             box-shadow: 0 8px 30px rgba(102, 126, 234, 0.4);
         }
         
+        /* Calendar Layout Fix */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+            margin-top: 20px;
+        }
+        .calendar-day {
+            min-height: 90px;
+            height: 90px;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: flex-start;
+            padding: 6px 8px;
+            box-sizing: border-box;
+            transition: box-shadow 0.15s;
+            overflow: hidden;
+        }
+        .calendar-day.other-month {
+            background: #f8f9fa;
+            color: #adb5bd;
+        }
+        .calendar-day .day-hours,
+        .calendar-day .day-pay {
+            font-size: 0.9em;
+            margin-top: 2px;
+            color: #495057;
+            word-break: break-all;
+        }
+        .calendar-day:hover {
+            box-shadow: 0 0 0 2px #0d6efd33;
+            background: #e9ecef;
+            cursor: pointer;
+        }
         /* Responsive Design */
         @media (max-width: 768px) {
             .clock-container {
                 padding: 20px 15px;
             }
-            
             .clock-actions {
                 grid-template-columns: 1fr;
                 gap: 20px;
             }
-            
             .current-time {
                 font-size: 2.5rem;
             }
-            
             .edit-rate-section {
                 grid-template-columns: 1fr;
+            }
+            .calendar-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .calendar-day {
+                min-height: 70px;
+                height: 70px;
+                font-size: 0.95em;
             }
         }
     </style>

@@ -148,12 +148,10 @@ class DepositorManager {    constructor(apiManager) {
         }
     }
 
-    // Generate dynamic table headers (mirrors generateTableHeaders)
+    // Generate dynamic table headers (mirrors Customers.js/Leads.js order)
     generateTableHeaders(headerElement) {
         if (!headerElement) return;
-        
         headerElement.innerHTML = '';
-        
         // Get all unique labels from all depositors' original list labels
         const allLabels = new Map();
         this.allDepositors.forEach(depositor => {
@@ -165,27 +163,46 @@ class DepositorManager {    constructor(apiManager) {
                 });
             }
         });
-        
-        // Add unique labels as headers
+        // Prepare label order: all except phone, then phone last
+        const labelOrder = [];
+        let phoneFieldName = null, phoneDisplayLabel = null;
         allLabels.forEach((displayLabel, fieldName) => {
+            if (fieldName.toLowerCase().includes('phone')) {
+                phoneFieldName = fieldName;
+                phoneDisplayLabel = displayLabel;
+            } else {
+                labelOrder.push({ fieldName, displayLabel });
+            }
+        });
+        // Add non-phone labels first
+        labelOrder.forEach(({ displayLabel }) => {
             const th = document.createElement('th');
             th.textContent = displayLabel;
             headerElement.appendChild(th);
         });
-        
-        // Add standard columns
-        const standardColumns = ['Original List', 'Status', 'Created'];
-        standardColumns.forEach(columnName => {
+        // Add Original List
+        const thList = document.createElement('th');
+        thList.textContent = 'List';
+        headerElement.appendChild(thList);
+        // Add Created (before Status)
+        const thCreated = document.createElement('th');
+        thCreated.textContent = 'Created';
+        headerElement.appendChild(thCreated);
+        // Add Status
+        const thStatus = document.createElement('th');
+        thStatus.textContent = 'Status';
+        headerElement.appendChild(thStatus);
+        // Add phone label last (if exists)
+        if (phoneFieldName) {
             const th = document.createElement('th');
-            th.textContent = columnName;
+            th.textContent = phoneDisplayLabel;
             headerElement.appendChild(th);
-        });
+        }
     }
 
-    // Generate depositor row HTML (mirrors generateCustomerRow)
+    // Generate depositor row HTML (mirrors generateCustomerRow, with phone last and big button)
     generateDepositorRow(depositor) {
         let rowHtml = '';
-        
         // Get all unique labels from all depositors
         const allLabels = new Map();
         this.allDepositors.forEach(d => {
@@ -197,21 +214,27 @@ class DepositorManager {    constructor(apiManager) {
                 });
             }
         });
-          // Add data for each unique label
+        // Prepare label order: all except phone, then phone last
+        const labelOrder = [];
+        let phoneFieldName = null;
         allLabels.forEach((displayLabel, fieldName) => {
-            const value = depositor.customFields?.[fieldName] || '-';            // Check if this is a phone field and format it for click-to-call
-            if (this.isPhoneField(fieldName) && value && value !== '-') {
-                const formattedPhone = this.formatPhoneForCall(value);
-                const displayPhone = this.formatPhoneForDisplay(value);
-                rowHtml += `<td><span class="phone-link" data-phone="${formattedPhone}" title="Click to call with MicroSip" style="cursor: pointer; color: #0066cc; text-decoration: underline;">${displayPhone}</span></td>`;
+            if (fieldName.toLowerCase().includes('phone')) {
+                phoneFieldName = fieldName;
             } else {
-                rowHtml += `<td>${value}</td>`;
+                labelOrder.push(fieldName);
             }
         });
-          // Add original list name
+        // Add non-phone fields first
+        labelOrder.forEach(fieldName => {
+            const value = depositor.customFields?.[fieldName] || '-';
+            rowHtml += `<td>${value}</td>`;
+        });
+        // Add Original List
         rowHtml += `<td><span class="badge bg-secondary">${depositor.originalListName || 'Unknown List'}</span></td>`;
-        
-        // Add status dropdown
+        // Add Created (before Status)
+        const createdDate = new Date(depositor.createdAt).toLocaleDateString();
+        rowHtml += `<td>${createdDate}</td>`;
+        // Add Status
         const statusOptions = ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'];
         const currentStatus = depositor.status || 'new';
         rowHtml += `
@@ -225,11 +248,17 @@ class DepositorManager {    constructor(apiManager) {
                 </select>
             </td>
         `;
-        
-        // Add created date
-        const createdDate = new Date(depositor.createdAt).toLocaleDateString();
-        rowHtml += `<td>${createdDate}</td>`;
-        
+        // Add phone field last (big button)
+        if (phoneFieldName) {
+            const value = depositor.customFields?.[phoneFieldName] || '-';
+            if (this.isPhoneField(phoneFieldName) && value && value !== '-') {
+                const formattedPhone = this.formatPhoneForCall(value);
+                const displayPhone = this.formatPhoneForDisplay(value);
+                rowHtml += `<td><span class="phone-link big-phone-link" data-phone="${formattedPhone}" title="Click to call with MicroSip"><span style="font-size:2rem; vertical-align:middle;">${displayPhone}</span></span></td>`;
+            } else {
+                rowHtml += `<td>${value}</td>`;
+            }
+        }
         return rowHtml;
     }
 

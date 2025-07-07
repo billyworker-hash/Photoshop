@@ -1,5 +1,6 @@
 // Customers.js - Handle customer list functionality (mirrors Leads.js structure)
-class CustomerManager {    constructor(apiManager) {
+class CustomerManager {
+    constructor(apiManager) {
         this.apiManager = apiManager;
         this.allCustomers = [];
     }
@@ -9,10 +10,10 @@ class CustomerManager {    constructor(apiManager) {
         try {
             // Fetch customers from the API
             this.allCustomers = await this.fetchCustomers();
-            
+
             // Display customers with proper headers
             this.displayCustomers(this.allCustomers);
-            
+
             // Set up search and filter event listeners
             this.setupCustomerFilters();
         } catch (err) {
@@ -32,11 +33,11 @@ class CustomerManager {    constructor(apiManager) {
     async fetchCustomers() {
         try {
             const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/customers`);
-            
+
             if (!response.ok) {
                 throw new Error('Failed to fetch customers');
             }
-            
+
             return await response.json();
         } catch (err) {
             console.error('Error fetching customers:', err);
@@ -49,26 +50,26 @@ class CustomerManager {    constructor(apiManager) {
         const tableHeader = document.getElementById('customers-table-header');
         const tableBody = document.getElementById('customers-table-body');
         const noCustomersMessage = document.getElementById('no-customers-message');
-        
+
         if (!tableBody) return;
-        
+
         // Generate dynamic table headers
         this.generateTableHeaders(tableHeader);
-        
+
         tableBody.innerHTML = '';
-        
+
         // Apply filters if provided
         let filteredCustomers = [...customers];
-        
+
         if (filters.search) {
             const searchTerm = filters.search.toLowerCase();
             filteredCustomers = filteredCustomers.filter(customer => {
                 // Search in standard fields
-                const standardMatch = customer.fullName?.toLowerCase().includes(searchTerm) || 
-                                    customer.email?.toLowerCase().includes(searchTerm) || 
-                                    customer.phone?.toLowerCase().includes(searchTerm) ||
-                                    customer.originalListName?.toLowerCase().includes(searchTerm);
-                
+                const standardMatch = customer.fullName?.toLowerCase().includes(searchTerm) ||
+                    customer.email?.toLowerCase().includes(searchTerm) ||
+                    customer.phone?.toLowerCase().includes(searchTerm) ||
+                    customer.originalListName?.toLowerCase().includes(searchTerm);
+
                 // Search in custom fields from original list
                 let customMatch = false;
                 if (customer.originalListLabels && Array.isArray(customer.originalListLabels)) {
@@ -77,48 +78,49 @@ class CustomerManager {    constructor(apiManager) {
                         return value && value.toString().toLowerCase().includes(searchTerm);
                     });
                 }
-                
+
                 return standardMatch || customMatch;
             });
         }
-        
+
         if (filters.status && filters.status !== '') {
             filteredCustomers = filteredCustomers.filter(customer => customer.status === filters.status);
         }
-        
+
         // Show/hide no customers message
         if (filteredCustomers.length === 0) {
             tableBody.innerHTML = '';
             if (noCustomersMessage) noCustomersMessage.style.display = 'block';
         } else {
             if (noCustomersMessage) noCustomersMessage.style.display = 'none';
-              // Display filtered customers
+            // Display filtered customers
             filteredCustomers.forEach(customer => {
                 const row = document.createElement('tr');
                 row.innerHTML = this.generateCustomerRow(customer);
                 row.style.cursor = 'pointer';
                 row.dataset.customerId = customer._id;
                 tableBody.appendChild(row);
-                  // Add event listener to the entire row to open notes modal, but ignore clicks on dropdowns
+                // Add event listener to the entire row to open notes modal, but ignore clicks on dropdowns
                 const rowClickHandler = (e) => {
                     // Don't trigger if the click was on a dropdown or its elements
-                    if (e.target.classList.contains('customer-status-dropdown') || 
+                    if (e.target.classList.contains('customer-status-dropdown') ||
                         e.target.closest('.customer-status-dropdown')) {
                         return;
                     }
                     this.openCustomerNotesModal(customer);
-                };                row.addEventListener('click', rowClickHandler);            });
-            
+                }; row.addEventListener('click', rowClickHandler);
+            });
+
             // Add event listeners to phone spans to enable click-to-call
             const phoneLinks = tableBody.querySelectorAll('.phone-link');
             phoneLinks.forEach(span => {
                 const phoneLinkHandler = (e) => {
                     e.stopPropagation(); // Prevent the row click event
-                    
+
                     // Get the phone number from the data attribute
                     const phoneNumber = span.getAttribute('data-phone');
                     const sipUrl = `sip:${phoneNumber}`;
-                    
+
                     // Try to open the SIP URL in a new way that doesn't block the UI
                     try {
                         // Create a temporary iframe to handle the SIP protocol
@@ -126,7 +128,7 @@ class CustomerManager {    constructor(apiManager) {
                         iframe.style.display = 'none';
                         iframe.src = sipUrl;
                         document.body.appendChild(iframe);
-                        
+
                         // Remove the iframe after a short delay
                         setTimeout(() => {
                             document.body.removeChild(iframe);
@@ -138,7 +140,7 @@ class CustomerManager {    constructor(apiManager) {
                 };
                 span.addEventListener('click', phoneLinkHandler);
             });
-            
+
             // Apply status colors to dropdowns
             this.applyStatusColors();
         }
@@ -147,9 +149,7 @@ class CustomerManager {    constructor(apiManager) {
     // Generate dynamic table headers (mirrors generateTableHeaders)
     generateTableHeaders(headerElement) {
         if (!headerElement) return;
-        
         headerElement.innerHTML = '';
-        
         // Get all unique labels from all customers' original list labels
         const allLabels = new Map();
         this.allCustomers.forEach(customer => {
@@ -161,27 +161,48 @@ class CustomerManager {    constructor(apiManager) {
                 });
             }
         });
-        
-        // Add unique labels as headers
+
+        // Prepare label order: all except phone, then Created, then Status, then phone (if exists)
+        const labelOrder = [];
+        let phoneFieldName = null, phoneDisplayLabel = null;
         allLabels.forEach((displayLabel, fieldName) => {
+            if (fieldName.toLowerCase().includes('phone')) {
+                phoneFieldName = fieldName;
+                phoneDisplayLabel = displayLabel;
+            } else {
+                labelOrder.push({ fieldName, displayLabel });
+            }
+        });
+
+        // Add non-phone labels first
+        labelOrder.forEach(({ displayLabel }) => {
             const th = document.createElement('th');
             th.textContent = displayLabel;
             headerElement.appendChild(th);
         });
-        
-        // Add standard columns
-        const standardColumns = ['Original List', 'Status', 'Created'];
-        standardColumns.forEach(columnName => {
+        // Add Original List
+        const thList = document.createElement('th');
+        thList.textContent = 'List';
+        headerElement.appendChild(thList);
+        // Add Created (before Status)
+        const thCreated = document.createElement('th');
+        thCreated.textContent = 'Created';
+        headerElement.appendChild(thCreated);
+        // Add Status
+        const thStatus = document.createElement('th');
+        thStatus.textContent = 'Status';
+        headerElement.appendChild(thStatus);
+        // Add phone label last (if exists)
+        if (phoneFieldName) {
             const th = document.createElement('th');
-            th.textContent = columnName;
+            th.textContent = phoneDisplayLabel;
             headerElement.appendChild(th);
-        });
+        }
     }
 
     // Generate customer row HTML (mirrors generateLeadRow)
     generateCustomerRow(customer) {
         let rowHtml = '';
-        
         // Get all unique labels from all customers
         const allLabels = new Map();
         this.allCustomers.forEach(c => {
@@ -193,21 +214,27 @@ class CustomerManager {    constructor(apiManager) {
                 });
             }
         });
-          // Add data for each unique label
+        // Prepare label order: all except phone, then phone last
+        const labelOrder = [];
+        let phoneFieldName = null;
         allLabels.forEach((displayLabel, fieldName) => {
-            const value = customer.customFields?.[fieldName] || '-';            // Check if this is a phone field and format it for click-to-call
-            if (this.isPhoneField(fieldName) && value && value !== '-') {
-                const formattedPhone = this.formatPhoneForCall(value);
-                const displayPhone = this.formatPhoneForDisplay(value);
-                rowHtml += `<td><span class="phone-link" data-phone="${formattedPhone}" title="Click to call with MicroSip" style="cursor: pointer; color: #0066cc; text-decoration: underline;">${displayPhone}</span></td>`;
+            if (fieldName.toLowerCase().includes('phone')) {
+                phoneFieldName = fieldName;
             } else {
-                rowHtml += `<td>${value}</td>`;
+                labelOrder.push(fieldName);
             }
         });
-          // Add original list name
+        // Add non-phone fields first
+        labelOrder.forEach(fieldName => {
+            const value = customer.customFields?.[fieldName] || '-';
+            rowHtml += `<td>${value}</td>`;
+        });
+        // Add Original List
         rowHtml += `<td><span class="badge bg-secondary">${customer.originalListName || 'Unknown List'}</span></td>`;
-        
-        // Add status dropdown
+        // Add Created (before Status)
+        const createdDate = new Date(customer.createdAt).toLocaleDateString();
+        rowHtml += `<td>${createdDate}</td>`;
+        // Add Status dropdown
         const statusOptions = ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'];
         const currentStatus = customer.status || 'new';
         rowHtml += `
@@ -215,24 +242,34 @@ class CustomerManager {    constructor(apiManager) {
                 <select class="form-select form-select-sm customer-status-dropdown" 
                         data-customer-id="${customer._id}" 
                         onchange="window.customerManager.updateCustomerStatus('${customer._id}', this.value)">
-                    ${statusOptions.map(status => 
-                        `<option value="${status}" ${status === currentStatus ? 'selected' : ''}>${this.formatStatus(status)}</option>`
-                    ).join('')}
+                    ${statusOptions.map(status =>
+            `<option value="${status}" ${status === currentStatus ? 'selected' : ''}>${this.formatStatus(status)}</option>`
+        ).join('')}
                 </select>
             </td>
         `;
-        
-        // Add created date
-        const createdDate = new Date(customer.createdAt).toLocaleDateString();
-        rowHtml += `<td>${createdDate}</td>`;
-        
+        // Add phone field last (if exists)
+        if (phoneFieldName) {
+            const value = customer.customFields?.[phoneFieldName] || '-';
+            if (this.isPhoneField(phoneFieldName) && value && value !== '-') {
+                const formattedPhone = this.formatPhoneForCall(value);
+                const displayPhone = this.formatPhoneForDisplay(value);
+                rowHtml += `<td>
+        <span class="phone-link big-phone-link" data-phone="${formattedPhone}" title="Click to call with MicroSip">
+            <span style="font-size:2rem; vertical-align:middle;">${displayPhone}</span>
+        </span>
+    </td>`;
+            } else {
+                rowHtml += `<td>${value}</td>`;
+            }
+        }
         return rowHtml;
-    }    // Set up customer filters (mirrors setupLeadFilters)
+    }
     setupCustomerFilters() {
         const searchInput = document.getElementById('customer-search');
         const statusFilter = document.getElementById('customer-status-filter');
         const resetFiltersBtn = document.getElementById('reset-customer-filters');
-        
+
         // Function to apply filters
         const applyFilters = () => {
             const filters = {
@@ -246,11 +283,11 @@ class CustomerManager {    constructor(apiManager) {
         if (searchInput) {
             searchInput.addEventListener('input', applyFilters);
         }
-        
+
         if (statusFilter) {
             statusFilter.addEventListener('change', applyFilters);
         }
-        
+
         if (resetFiltersBtn) {
             resetFiltersBtn.addEventListener('click', () => {
                 if (searchInput) searchInput.value = '';
@@ -268,7 +305,7 @@ class CustomerManager {    constructor(apiManager) {
         if (typeof resetModalButtons === 'function') {
             resetModalButtons();
         }
-        
+
         var customerNoteId = document.getElementById('lead-note-id'); // Reusing lead modal elements
         var customerNoteStatus = document.getElementById('lead-note-status');
         var customerNotesContainer = document.getElementById('lead-notes-container');
@@ -276,35 +313,35 @@ class CustomerManager {    constructor(apiManager) {
         var releaseLeadBtn = document.getElementById('release-lead-btn');
         var transferLeadBtn = document.getElementById('transfer-lead-btn');
         var moveToDepositorsBtn = document.getElementById('move-to-depositors-btn');
-        
+
         // Hide the "Own Lead" button since this is already a customer
         if (ownLeadBtn) {
             ownLeadBtn.style.display = 'none';
         }
-        
+
         // Hide the "Transfer Lead" button for customers
         if (transferLeadBtn) {
             transferLeadBtn.style.display = 'none';
         }
-        
+
         // Show the "Release Customer" button for customers
         if (releaseLeadBtn) {
             releaseLeadBtn.style.display = 'inline-block';
             releaseLeadBtn.textContent = 'Release Customer';
             releaseLeadBtn.className = 'btn btn-warning';
         }
-        
+
         // Show the "Move to Depositors" button for customers
         if (moveToDepositorsBtn) {
             moveToDepositorsBtn.style.display = 'inline-block';
         }
-        
+
         // Clear previous note textarea
         var noteContent = document.getElementById('lead-note-content');
         if (noteContent) {
             noteContent.value = '';
         }
-        
+
         // Set customer ID and status
         if (customerNoteId) {
             customerNoteId.value = customer._id;
@@ -312,28 +349,28 @@ class CustomerManager {    constructor(apiManager) {
         if (customerNoteStatus) {
             customerNoteStatus.value = customer.status || 'active';
         }
-        
+
         // Display previous notes if any
         if (customerNotesContainer) {
             this.displayCustomerNotes(customer, customerNotesContainer);
         }
-        
+
         // Update modal title
         const modalTitle = document.querySelector('#leadNotesModal .modal-title');
         if (modalTitle) {
             modalTitle.textContent = `Notes for ${customer.fullName || 'Customer'}`;
         }
-        
+
         var modal = new bootstrap.Modal(document.getElementById('leadNotesModal'));
         modal.show();
-        
+
         // Add event listener to the save note button
         var saveNoteBtn = document.getElementById('save-lead-note-btn');
         if (saveNoteBtn) {
             // Remove any existing event listeners to prevent duplicates
             var newSaveBtn = saveNoteBtn.cloneNode(true);
             saveNoteBtn.parentNode.replaceChild(newSaveBtn, saveNoteBtn);
-            
+
             // Add new event listener
             newSaveBtn.addEventListener('click', () => {
                 this.saveCustomerNote(customer._id);
@@ -343,38 +380,39 @@ class CustomerManager {    constructor(apiManager) {
             // Remove any existing event listeners to prevent duplicates
             var newReleaseBtn = releaseLeadBtn.cloneNode(true);
             releaseLeadBtn.parentNode.replaceChild(newReleaseBtn, releaseLeadBtn);
-            
+
             // Add new event listener
             newReleaseBtn.addEventListener('click', () => {
                 this.releaseCustomer(customer._id);
             });
         }
-        
+
         // Add event listener to the move to depositors button
         if (moveToDepositorsBtn) {
             // Remove any existing event listeners to prevent duplicates
             var newMoveBtn = moveToDepositorsBtn.cloneNode(true);
             moveToDepositorsBtn.parentNode.replaceChild(newMoveBtn, moveToDepositorsBtn);
-            
+
             // Add new event listener
             newMoveBtn.addEventListener('click', () => {
                 this.moveToDepositors(customer._id);
-            });        }
+            });
+        }
     }
 
     // Display customer notes (mirrors displayLeadNotes)
     displayCustomerNotes(customer, container) {
         if (!container) return;
-        
+
         container.innerHTML = '';
-        
+
         if (!customer.notes || customer.notes.length === 0) {
             container.innerHTML = '<div class="text-center text-muted py-2">No notes yet</div>';
             return;
         }
-        
+
         // Sort notes by newest first
-        const sortedNotes = [...customer.notes].sort((a, b) => 
+        const sortedNotes = [...customer.notes].sort((a, b) =>
             new Date(b.createdAt) - new Date(a.createdAt)
         );        // Create note elements
         sortedNotes.forEach(note => {
@@ -406,17 +444,17 @@ class CustomerManager {    constructor(apiManager) {
     async saveCustomerNote(customerId) {
         const noteContent = document.getElementById('lead-note-content').value.trim();
         const noteStatus = document.getElementById('lead-note-status').value;
-        
+
         // Note content is optional, but we need to update the status
         try {
             // Get the current user
             const currentUser = this.apiManager.getCurrentUser();
-            
+
             // Prepare the data - only include the note if there's content
             const data = {
                 status: noteStatus
             };
-            
+
             // Only add the note if there's actual content
             if (noteContent) {
                 data.note = {
@@ -424,7 +462,7 @@ class CustomerManager {    constructor(apiManager) {
                     createdBy: currentUser ? currentUser.id : null
                 };
             }
-            
+
             const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/customers/${customerId}/notes`, {
                 method: 'POST',
                 headers: {
@@ -432,18 +470,18 @@ class CustomerManager {    constructor(apiManager) {
                 },
                 body: JSON.stringify(data)
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to save customer note');
             }
-            
+
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
             if (modal) modal.hide();
-            
+
             // Reload customers to reflect changes
             this.loadCustomers();
-              this.apiManager.showAlert('Note saved successfully', 'success');
+            this.apiManager.showAlert('Note saved successfully', 'success');
         } catch (err) {
             console.error('Error saving customer note:', err);
             this.apiManager.showAlert('Failed to save note: ' + err.message, 'danger');
@@ -454,7 +492,7 @@ class CustomerManager {    constructor(apiManager) {
             // Check if there's unsaved note content in the modal
             const noteContent = document.getElementById('lead-note-content')?.value?.trim();
             const noteStatus = document.getElementById('lead-note-status')?.value;
-            
+
             // If there's note content, save it first before releasing the customer
             if (noteContent) {
                 await this.saveCustomerNote(customerId);
@@ -468,22 +506,22 @@ class CustomerManager {    constructor(apiManager) {
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to release customer');
             }
-            
+
             const result = await response.json();
-            
+
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
             if (modal) modal.hide();
-              // Reload customers to reflect changes
+            // Reload customers to reflect changes
             await this.loadCustomers();
-            
+
             // Show success message using the apiManager.showAlert
             this.apiManager.showAlert('Customer successfully released back to leads pool', 'success');
-            
+
         } catch (err) {
             console.error('Error releasing customer:', err);
             this.apiManager.showAlert(`Error: ${err.message}`, 'danger');
@@ -494,7 +532,7 @@ class CustomerManager {    constructor(apiManager) {
             // Check if there's unsaved note content in the modal
             const noteContent = document.getElementById('lead-note-content')?.value?.trim();
             const noteStatus = document.getElementById('lead-note-status')?.value;
-            
+
             // If there's note content, save it first before moving the customer
             if (noteContent) {
                 await this.saveCustomerNote(customerId);
@@ -508,22 +546,22 @@ class CustomerManager {    constructor(apiManager) {
                     'Content-Type': 'application/json'
                 }
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to move customer to depositors');
             }
-            
+
             const result = await response.json();
-            
+
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
             if (modal) modal.hide();
-            
+
             // Reload customers to reflect changes
             await this.loadCustomers();
-            
+
             this.apiManager.showAlert('Customer successfully moved to depositors list', 'success');
-            
+
         } catch (err) {
             console.error('Error moving customer to depositors:', err);
             this.apiManager.showAlert(`Error: ${err.message}`, 'danger');
@@ -538,41 +576,41 @@ class CustomerManager {    constructor(apiManager) {
                 },
                 body: JSON.stringify({ status: newStatus })
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to update customer status');
             }
-            
+
             // Update the customer in our local array
             const customerIndex = this.allCustomers.findIndex(customer => customer._id === customerId);
             if (customerIndex !== -1) {
                 this.allCustomers[customerIndex].status = newStatus;
             }
-            
+
             // Visual feedback - briefly highlight the dropdown with classes
             const dropdown = document.querySelector(`[data-customer-id="${customerId}"]`);
             if (dropdown) {
                 // Add animation and success feedback classes
                 dropdown.classList.add('status-update-animation');
                 dropdown.classList.add('success-feedback');
-                
+
                 // Apply new status color immediately
                 this.applyStatusColors();
-                
+
                 // Remove animation classes after animation completes
                 setTimeout(() => {
                     dropdown.classList.remove('success-feedback');
                     dropdown.classList.remove('status-update-animation');
                 }, 1000);
             }
-            
+
             // Show status update toast
             this.showStatusUpdateToast(newStatus);
-            
+
         } catch (err) {
             console.error('Error updating customer status:', err);
             this.apiManager.showAlert(`Error updating status: ${err.message}`, 'danger');
-            
+
             // Revert the dropdown to the previous value
             const dropdown = document.querySelector(`[data-customer-id="${customerId}"]`);
             if (dropdown) {
@@ -593,10 +631,10 @@ class CustomerManager {    constructor(apiManager) {
             toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
             document.body.appendChild(toastContainer);
         }
-        
+
         // Create unique ID for this toast
         const toastId = 'status-toast-' + Date.now();
-        
+
         // Create toast HTML
         const toastHtml = `
             <div id="${toastId}" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
@@ -608,10 +646,10 @@ class CustomerManager {    constructor(apiManager) {
                 </div>
             </div>
         `;
-        
+
         // Add toast to container
         toastContainer.insertAdjacentHTML('beforeend', toastHtml);
-        
+
         // Initialize and show the toast
         const toastElement = document.getElementById(toastId);
         const toast = new bootstrap.Toast(toastElement, {
@@ -619,7 +657,7 @@ class CustomerManager {    constructor(apiManager) {
             delay: 3000
         });
         toast.show();
-        
+
         // Remove toast from DOM after it's hidden
         toastElement.addEventListener('hidden.bs.toast', () => {
             toastElement.remove();
@@ -628,12 +666,12 @@ class CustomerManager {    constructor(apiManager) {
     applyStatusColors() {
         document.querySelectorAll('.customer-status-dropdown').forEach(dropdown => {
             const status = dropdown.value;
-              // Remove existing status color classes
-            dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail', 
-                                     'status-call-back-qualified', 'status-call-back-not-qualified');
-            
+            // Remove existing status color classes
+            dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail',
+                'status-call-back-qualified', 'status-call-back-not-qualified');
+
             // Add class based on current status
-            switch(status) {
+            switch (status) {
                 case 'new':
                     dropdown.classList.add('status-new');
                     break;
@@ -654,24 +692,24 @@ class CustomerManager {    constructor(apiManager) {
     }// Helper function to safely get field values
     getField(obj, fieldName) {
         if (!obj) return '';
-        
+
         // First check direct properties
         if (obj[fieldName]) return obj[fieldName];
-        
+
         // Then check customFields
         if (obj.customFields && obj.customFields[fieldName]) {
             return obj.customFields[fieldName];
         }
-        
+
         return '';
     }
 
     // Check if a field is a phone field (for click-to-call)
     isPhoneField(fieldName) {
         return fieldName && (
-            fieldName.toLowerCase().includes('phone') || 
-            fieldName.toLowerCase().includes('tel') || 
-            fieldName.toLowerCase().includes('mobile') || 
+            fieldName.toLowerCase().includes('phone') ||
+            fieldName.toLowerCase().includes('tel') ||
+            fieldName.toLowerCase().includes('mobile') ||
             fieldName.toLowerCase().includes('cell')
         );
     }
@@ -684,7 +722,7 @@ class CustomerManager {    constructor(apiManager) {
     }    // Format phone number for display with just a phone icon to save space
     formatPhoneForDisplay(phoneNumber) {
         if (!phoneNumber) return '';
-        
+
         // Return a different phone icon to save maximum space
         return '☎️';
     }

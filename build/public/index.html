@@ -50,9 +50,9 @@
                     <a href="#" class="nav-link" id="depositors-tab" data-page="depositors">
                         <i class="bi bi-bank me-2"></i> Depositors
                     </a>
-                    <!-- <a href="#" class="nav-link" id="calendar-tab" data-page="calendar">
+                    <a href="#" class="nav-link" id="calendar-tab" data-page="calendar">
                         <i class="bi bi-calendar"></i> Calendar
-                    </a> -->
+                    </a>
                     <div id="admin-menu" style="display: none;">
                         <a href="#" class="nav-link" data-page="upload">
                             <i class="bi bi-upload me-2"></i> Manage Leads
@@ -67,8 +67,8 @@
                 </div>
             </div>
             <!-- Main Content -->
-            <div class="col-md-10 main-content"> <!-- Dashboard Page -->
-                <div id="dashboard-page" class="page-content container mt-4" style="display: none;">
+            <div class="col main-content"> <!-- Dashboard Page -->
+                <div id="dashboard-page" class="page-content container-fluid mt-4" style="display: none;">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <div>
                             <h2 class="mb-1">Dashboard</h2>
@@ -138,7 +138,7 @@
                         </div>
                     </div>
                 </div><!-- Leads Page -->
-                <div id="leads-page" class="page-content container mt-4" style="display: none;">
+                <div id="leads-page" class="page-content container-fluid mt-4" style="display: none;">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h2>Leads</h2>
                     </div>
@@ -236,7 +236,7 @@
                         </div>
                     </div>
                 </div> <!-- Upload Leads Page -->
-                <div id="upload-page" class="page-content container mt-4" style="display: none;">
+                <div id="upload-page" class="page-content container-fluid mt-4" style="display: none;">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h2>Lead List Management</h2>
                         <button class="btn btn-primary" onclick="window.uploadManager.showCreateListModal()">
@@ -390,7 +390,7 @@
                 </div>
 
                 <!-- Users Page (Admin only) -->
-                <div id="users-page" class="page-content container mt-4" style="display: none;">
+                <div id="users-page" class="page-content container-fluid mt-4" style="display: none;">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h2>Users</h2>
                         <div class="d-flex gap-2">
@@ -425,7 +425,7 @@
                 </div>
 
                 <!-- Custom Fields Page (Admin only) -->
-                <div id="fields-page" class="page-content container mt-4" style="display: none;">
+                <div id="fields-page" class="page-content container-fluid mt-4" style="display: none;">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h2>Custom Fields</h2>
                         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addFieldModal">
@@ -454,7 +454,12 @@
                         </div>
                     </div>
                 </div> <!-- Customers Page -->
-                <div id="customers-page" class="page-content container mt-4" style="display: none;">
+                <div id="customers-page" class="page-content container-fluid mt-4" style="display: none;">
+                    <!-- Customer List Cards Section -->
+                    <div class="mb-4">
+                        <h4 class="mb-3" id="customer-lists-title">Customer Lists</h4>
+                        <div id="original-list-cards" class="original-list-cards-bar"></div>
+                    </div>
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h2>My Customers</h2>
                     </div>
@@ -503,7 +508,7 @@
                 </div>
 
                 <!-- Depositors Page -->
-                <div id="depositors-page" class="page-content container mt-4" style="display: none;">
+                <div id="depositors-page" class="page-content container-fluid mt-4" style="display: none;">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h2>My Depositors</h2>
                     </div>
@@ -558,11 +563,6 @@
                     <div class="card shadow mb-4">
                         <div class="card-body">
                             <div id="simple-calendar"></div>
-                        </div>
-                    </div>
-                    <div class="card shadow mb-4">
-                        <div class="card-body">
-                            <div id="calendar-summary"></div>
                         </div>
                     </div>
                 </div>

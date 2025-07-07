@@ -741,211 +741,205 @@ class LeadsManager {
         this.displayLeads(this.currentLeads);
     }
 
-    // Generate dynamic table headers
-    generateTableHeaders(headerElement) {
-        if (!headerElement) return;
+// Generate dynamic table headers
+generateTableHeaders(headerElement) {
+    if (!headerElement) return;
 
-        headerElement.innerHTML = '';
+    headerElement.innerHTML = '';
 
-        // Add list-specific label columns if a list is selected
-        if (this.selectedListId) {
-            const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);
-            if (selectedList && selectedList.labels && selectedList.labels.length > 0) {
-                selectedList.labels.forEach(label => {
-                    const th = document.createElement('th');
-                    th.textContent = label.label;
+    let phoneLabels = [], otherLabels = [];
 
-                    // Add sort icon
-                    const sortIcon = document.createElement('span');
-                    sortIcon.style.marginLeft = '5px';
-                    sortIcon.innerHTML = (this.sortField === label.name)
-                        ? (this.sortOrder === 'asc' ? '▲' : '▼')
-                        : '⇅';
-                    th.appendChild(sortIcon);
-
-                    // Make the whole header clickable (except for phone fields)
-                    if (!this.isPhoneField(label.name)) {
-                        th.style.cursor = 'pointer';
-                        th.classList.add('sortable-header');
-                        th.addEventListener('click', () => {
-                            if (this.sortField === label.name) {
-                                this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
-                            } else {
-                                this.sortField = label.name;
-                                this.sortOrder = 'asc';
-                            }
-                            this.sortLeads();
-                            this.displayLeads(this.currentLeads);
-                        });
-                    } else {
-                        th.style.cursor = 'default';
-                    }
-
-                    headerElement.appendChild(th);
+    if (this.selectedListId) {
+        const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);
+        if (selectedList && selectedList.labels && selectedList.labels.length > 0) {
+            phoneLabels = selectedList.labels.filter(label => this.isPhoneField(label.name));
+            otherLabels = selectedList.labels.filter(label => !this.isPhoneField(label.name));
+        }
+    } else {
+        // If no specific list is selected, show all possible labels from all lists
+        const allLabels = new Map();
+        this.allLeadLists.forEach(list => {
+            if (list.labels) {
+                list.labels.forEach(label => {
+                    allLabels.set(label.name, label.label);
                 });
             }
-        } else {
-            // If no specific list is selected, show all possible labels from all lists
-            const allLabels = new Map();
-            this.allLeadLists.forEach(list => {
-                if (list.labels) {
-                    list.labels.forEach(label => {
-                        allLabels.set(label.name, label.label);
-                    });
-                }
-            });
+        });
+        allLabels.forEach((displayLabel, fieldName) => {
+            if (this.isPhoneField(fieldName)) {
+                phoneLabels.push({ name: fieldName, label: displayLabel });
+            } else {
+                otherLabels.push({ name: fieldName, label: displayLabel });
+            }
+        });
+    }
 
-            // Add unique labels
-            allLabels.forEach((displayLabel, fieldName) => {
-                const th = document.createElement('th');
-                th.textContent = displayLabel;
+    // Render non-phone fields first
+    otherLabels.forEach(label => {
+        const th = document.createElement('th');
+        th.textContent = label.label;
 
-                // Add sort icon
-                const sortIcon = document.createElement('span');
-                sortIcon.style.marginLeft = '5px';
-                sortIcon.innerHTML = (this.sortField === fieldName)
-                    ? (this.sortOrder === 'asc' ? '▲' : '▼')
-                    : '⇅';
-                th.appendChild(sortIcon);
-
-                // Make the whole header clickable (except for phone fields)
-                if (!this.isPhoneField(fieldName)) {
-                    th.style.cursor = 'pointer';
-                    th.classList.add('sortable-header');
-                    th.addEventListener('click', () => {
-                        if (this.sortField === fieldName) {
-                            this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
-                        } else {
-                            this.sortField = fieldName;
-                            this.sortOrder = 'asc';
-                        }
-                        this.sortLeads();
-                        this.displayLeads(this.currentLeads);
-                    });
-                } else {
-                    th.style.cursor = 'default';
-                }
-
-                headerElement.appendChild(th);
-            });
-        }
-
-        // Add status column (sortable)
-        const statusTh = document.createElement('th');
-        statusTh.textContent = 'Status';
-
-        // Add sort icon for status
-        const statusSortIcon = document.createElement('span');
-        statusSortIcon.style.marginLeft = '5px';
-        statusSortIcon.innerHTML = (this.sortField === 'status')
+        // Add sort icon
+        const sortIcon = document.createElement('span');
+        sortIcon.style.marginLeft = '5px';
+        sortIcon.innerHTML = (this.sortField === label.name)
             ? (this.sortOrder === 'asc' ? '▲' : '▼')
             : '⇅';
-        statusTh.appendChild(statusSortIcon);
+        th.appendChild(sortIcon);
 
-        // Make status header clickable for sorting
-        statusTh.style.cursor = 'pointer';
-        statusTh.classList.add('sortable-header');
-        statusTh.addEventListener('click', () => {
-            if (this.sortField === 'status') {
+        // Make the whole header clickable (except for phone fields)
+        th.style.cursor = 'pointer';
+        th.classList.add('sortable-header');
+        th.addEventListener('click', () => {
+            if (this.sortField === label.name) {
                 this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
             } else {
-                this.sortField = 'status';
+                this.sortField = label.name;
                 this.sortOrder = 'asc';
             }
             this.sortLeads();
             this.displayLeads(this.currentLeads);
         });
 
-        headerElement.appendChild(statusTh);
-    }
+        headerElement.appendChild(th);
+    });
 
+    // Add status column (sortable)
+    const statusTh = document.createElement('th');
+    statusTh.textContent = 'Status';
 
-    // Generate lead row HTML
-    generateLeadRow(lead) {
-        let rowHtml = '';
+    // Add sort icon for status
+    const statusSortIcon = document.createElement('span');
+    statusSortIcon.style.marginLeft = '5px';
+    statusSortIcon.innerHTML = (this.sortField === 'status')
+        ? (this.sortOrder === 'asc' ? '▲' : '▼')
+        : '⇅';
+    statusTh.appendChild(statusSortIcon);
 
-        // Add list-specific label data
-        if (this.selectedListId) {
-            const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId); if (selectedList && selectedList.labels && selectedList.labels.length > 0) {
-                selectedList.labels.forEach(label => {
-                    const value = lead.customFields?.[label.name] || '-';                    // Check if this is a phone field and format it for click-to-call
-                    if (this.isPhoneField(label.name) && value && value !== '-') {
-                        const formattedPhone = this.formatPhoneForCall(value);
-                        const displayPhone = this.formatPhoneForDisplay(value);
-                        rowHtml += `<td>
-    <span class="phone-link big-phone-link" data-phone="${formattedPhone}" title="Click to call with MicroSip">
-        <span style="font-size:2rem; vertical-align:middle;">${displayPhone}</span>
-    </span>
-</td>`;
-                    } else {
-                        rowHtml += `<td>${value}</td>`;
-                    }
+    // Make status header clickable for sorting
+    statusTh.style.cursor = 'pointer';
+    statusTh.classList.add('sortable-header');
+    statusTh.addEventListener('click', () => {
+        if (this.sortField === 'status') {
+            this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.sortField = 'status';
+            this.sortOrder = 'asc';
+        }
+        this.sortLeads();
+        this.displayLeads(this.currentLeads);
+    });
+
+    headerElement.appendChild(statusTh);
+
+    // Then render phone fields after status
+    phoneLabels.forEach(label => {
+        const th = document.createElement('th');
+        th.textContent = label.label;
+        th.style.cursor = 'default';
+        headerElement.appendChild(th);
+    });
+}
+
+// Generate lead row HTML
+generateLeadRow(lead) {
+    let rowHtml = '';
+
+    // Helper to render a cell for a label
+    const renderCell = (labelName, value) => {
+        if (this.isPhoneField(labelName) && value && value !== '-') {
+            const formattedPhone = this.formatPhoneForCall(value);
+            const displayPhone = this.formatPhoneForDisplay(value);
+            return `<td>
+                <span class="phone-link big-phone-link" data-phone="${formattedPhone}" title="Click to call with MicroSip">
+                    <span style="font-size:2rem; vertical-align:middle;">${displayPhone}</span>
+                </span>
+            </td>`;
+        } else {
+            return `<td>${value}</td>`;
+        }
+    };
+
+    let phoneLabels = [], otherLabels = [];
+
+    if (this.selectedListId) {
+        const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);
+        if (selectedList && selectedList.labels && selectedList.labels.length > 0) {
+            phoneLabels = selectedList.labels.filter(label => this.isPhoneField(label.name));
+            otherLabels = selectedList.labels.filter(label => !this.isPhoneField(label.name));
+        }
+    } else {
+        // If no specific list is selected, show all possible labels from all lists
+        const allLabels = new Map();
+        this.allLeadLists.forEach(list => {
+            if (list.labels) {
+                list.labels.forEach(label => {
+                    allLabels.set(label.name, label.label);
                 });
             }
-        } else {
-            // If no specific list is selected, show all possible labels from all lists
-            const allLabels = new Map();
-            this.allLeadLists.forEach(list => {
-                if (list.labels) {
-                    list.labels.forEach(label => {
-                        allLabels.set(label.name, label.label);
-                    });
-                }
-            });            // Add data for each unique label
-            allLabels.forEach((displayLabel, fieldName) => {
-                const value = lead.customFields?.[fieldName] || '-';
+        });
+        allLabels.forEach((displayLabel, fieldName) => {
+            if (this.isPhoneField(fieldName)) {
+                phoneLabels.push({ name: fieldName, label: displayLabel });
+            } else {
+                otherLabels.push({ name: fieldName, label: displayLabel });
+            }
+        });
+    }
 
-                // Check if this is a phone field and format it for click-to-call
-                if (this.isPhoneField(fieldName) && value && value !== '-') {
-                    const formattedPhone = this.formatPhoneForCall(value);
-                    const displayPhone = this.formatPhoneForDisplay(value);
-                    rowHtml += `<td>
-    <span class="phone-link big-phone-link" data-phone="${formattedPhone}" title="Click to call with MicroSip">
-        <span style="font-size:2rem; vertical-align:middle;">${displayPhone}</span>
-    </span>
-</td>`;
-                } else {
-                    rowHtml += `<td>${value}</td>`;
-                }
-            });
-        }          // Add status dropdown instead of badge
-        const statusOptions = [
-            'new',
-            'No Answer',
-            'Voice Mail',
-            'Call Back Qualified',
-            'Call Back NOT Qualified',
-            'deposited',
-            'active',
-            'withdrawn',
-            'inactive'
-        ];
+    // Render non-phone fields first
+    otherLabels.forEach(label => {
+        const value = lead.customFields?.[label.name] || '-';
+        rowHtml += renderCell(label.name, value);
+    });
 
-        let statusHtml = `
-            <div class="status-dropdown-wrapper" data-bs-toggle="tooltip" data-bs-placement="top" title="Click to change status">
-                <select class="form-select form-select-sm lead-status-dropdown" 
-                        data-lead-id="${lead._id}"
-                        title="Change lead status" 
-                        aria-label="Change lead status"
-                        onchange="window.leadsManager.updateLeadStatus('${lead._id}', this.value)">
-                    ${statusOptions.map(option =>
-            `<option value="${option}" ${lead.status === option ? 'selected' : ''}>${this.formatStatus(option)}</option>`
-        ).join('')}
-                </select>
-            </div>
-        `;
+    // Add status dropdown column
+    const statusOptions = [
+        'new',
+        'No Answer',
+        'Voice Mail',
+        'Call Back Qualified',
+        'Call Back NOT Qualified',
+        'deposited',
+        'active',
+        'withdrawn',
+        'inactive'
+    ];
 
-        // Add ownership indicator if lead is owned
-        if (lead.assignedTo && lead.assignedTo.name) {
-            statusHtml += `<br><small class="text-muted ownership-indicator mt-1">
-                <i class="fas fa-user"></i> Owned by ${lead.assignedTo.name}
-            </small>`;
-        }
+    let statusHtml = `
+        <div class="status-dropdown-wrapper" data-bs-toggle="tooltip" data-bs-placement="top" title="Click to change status">
+            <select class="form-select form-select-sm lead-status-dropdown" 
+                    data-lead-id="${lead._id}"
+                    title="Change lead status" 
+                    aria-label="Change lead status"
+                    onchange="window.leadsManager.updateLeadStatus('${lead._id}', this.value)">
+                ${statusOptions.map(option =>
+                    `<option value="${option}" ${lead.status === option ? 'selected' : ''}>${this.formatStatus(option)}</option>`
+                ).join('')}
+            </select>
+        </div>
+    `;
 
-        rowHtml += `<td>${statusHtml}</td>`;
+    // Add ownership indicator if lead is owned
+    if (lead.assignedTo && lead.assignedTo.name) {
+        statusHtml += `<br><small class="text-muted ownership-indicator mt-1">
+            <i class="fas fa-user"></i> Owned by ${lead.assignedTo.name}
+        </small>`;
+    }
 
-        return rowHtml;
-    }    // Filter leads by selected list (now triggers server fetch)
+    rowHtml += `<td>${statusHtml}</td>`;
+
+    // Then render phone fields after status
+    phoneLabels.forEach(label => {
+        const value = lead.customFields?.[label.name] || '-';
+        rowHtml += renderCell(label.name, value);
+    });
+
+    return rowHtml;
+}
+
+
+    // Filter leads by selected list (now triggers server fetch)
     async filterLeadsByList() {
         // Reset to first page when filtering
         this.currentPage = 1;

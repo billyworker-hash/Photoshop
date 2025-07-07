@@ -1,5 +1,14 @@
 const mongoose = require('mongoose');
 
+// Meeting (Appointment) Subschema
+const meetingSchema = new mongoose.Schema({
+    title: { type: String, required: true },
+    date: { type: String, required: true }, // 'YYYY-MM-DD'
+    time: { type: String }, // Optional, e.g. '14:00'
+    notes: { type: String },
+    createdAt: { type: Date, default: Date.now }
+}, { _id: true });
+
 // User Schema
 const userSchema = new mongoose.Schema({
     name: String,
@@ -8,7 +17,8 @@ const userSchema = new mongoose.Schema({
     role: { type: String, enum: ['admin', 'agent'], default: 'agent' },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
     hourlyRate: { type: Number, default: 0 }, // Hourly rate in ILS
-    createdAt: { type: Date, default: Date.now }
+    createdAt: { type: Date, default: Date.now },
+    meetings: [meetingSchema] // <-- Add this line
 });
 
 // Lead Field Schema - For dynamic custom fields

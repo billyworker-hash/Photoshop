@@ -13,7 +13,7 @@ class CalendarManager {
         this.renderCalendar();
     }
 
-    // Fetch appointments from modules and localStorage
+    // Fetch appointments from API (meetings)
     async fetchAppointments() {
         let appointments = [];
         // Gather appointments from Leads/Customers modules if available
@@ -21,28 +21,35 @@ class CalendarManager {
             const leadAppointments = await window.leadsManager.getAppointments();
             appointments = appointments.concat(leadAppointments.map(a => ({ ...a, module: 'Lead' })));
         }
-        // Add more modules here as needed
-        // Fetch from localStorage (for demo, key: 'calendarAppointments')
-        const local = JSON.parse(localStorage.getItem('calendarAppointments') || '[]');
-        appointments = appointments.concat(local.map(a => ({ ...a, module: a.module || 'Manual' })));
+        // Fetch from backend API
+        try {
+            const apiAppointments = await this.apiManager.get('/meetings');
+            appointments = appointments.concat(apiAppointments.map(a => ({ ...a, module: a.module || 'Manual' })));
+        } catch (err) {
+            window.apiManager && window.apiManager.showAlert && window.apiManager.showAlert('Failed to fetch meetings: ' + err.message, 'danger');
+        }
         return appointments;
     }
 
-    // Save a new appointment to localStorage
-    saveAppointment(appt) {
-        const local = JSON.parse(localStorage.getItem('calendarAppointments') || '[]');
-        local.push(appt);
-        localStorage.setItem('calendarAppointments', JSON.stringify(local));
+    // Save a new appointment to backend
+    async saveAppointment(appt) {
+        try {
+            await this.apiManager.post('/meetings', appt);
+        } catch (err) {
+            window.apiManager && window.apiManager.showAlert && window.apiManager.showAlert('Failed to save meeting: ' + err.message, 'danger');
+        }
     }
 
-    // Delete an appointment by id (localStorage only)
-    deleteAppointment(id) {
-        let local = JSON.parse(localStorage.getItem('calendarAppointments') || '[]');
-        local = local.filter(a => a.id !== id);
-        localStorage.setItem('calendarAppointments', JSON.stringify(local));
+    // Delete an appointment by id (API)
+    async deleteAppointment(id) {
+        try {
+            await this.apiManager.delete(`/meetings/${id}`);
+        } catch (err) {
+            window.apiManager && window.apiManager.showAlert && window.apiManager.showAlert('Failed to delete meeting: ' + err.message, 'danger');
+        }
     }
 
-    // Render a full calendar with Bootstrap, year/month navigation and Today button
+    // Render a full calendar with fixed-size boxes (no shifting)
     renderCalendar() {
         const calendarEl = document.getElementById('simple-calendar');
         if (!calendarEl) return;
@@ -56,8 +63,12 @@ class CalendarManager {
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
         const daysInMonth = lastDay.getDate();
+        // Appointments Summary and Calendar in separate divs
+        let html = '';
+        html += '<div class="calendar-summary-container mb-4"><div id="calendar-summary"></div></div>';
+        html += '<div class="calendar-main-container">';
         // Header with navigation and Today button
-        let html = `<div class="d-flex justify-content-between align-items-center mb-3">
+        html += `<div class="d-flex justify-content-between align-items-center mb-3">
             <div>
                 <button class="btn btn-outline-secondary btn-sm me-2" id="prev-month-btn"><i class="bi bi-chevron-left"></i> Prev</button>
                 <button class="btn btn-outline-primary btn-sm" id="today-btn"><i class="bi bi-calendar-event"></i> Today</button>
@@ -65,42 +76,53 @@ class CalendarManager {
             </div>
             <h4 class="mb-0"><span class="badge bg-light text-dark fs-6">${monthNames[month]} ${year}</span></h4>
         </div>`;
-        html += '<div class="table-responsive"><table class="table table-bordered table-striped align-middle text-center mb-0"><thead class="table-light"><tr>';
-        const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-        for (let d of days) html += `<th class="small">${d}</th>`;
-        html += '</tr></thead><tbody>';
+        // Calendar grid with fixed-size boxes
+        html += `<div class="calendar-grid-fixed">
+            <div class="calendar-row calendar-header-row">
+                <div class="calendar-cell calendar-header-cell">Sun</div>
+                <div class="calendar-cell calendar-header-cell">Mon</div>
+                <div class="calendar-cell calendar-header-cell">Tue</div>
+                <div class="calendar-cell calendar-header-cell">Wed</div>
+                <div class="calendar-cell calendar-header-cell">Thu</div>
+                <div class="calendar-cell calendar-header-cell">Fri</div>
+                <div class="calendar-cell calendar-header-cell">Sat</div>
+            </div>`;
         let dayOfWeek = firstDay.getDay();
+        let date = 1 - dayOfWeek;
         for (let week = 0; week < 6; week++) {
-            html += '<tr>';
+            html += '<div class="calendar-row">';
             for (let dow = 0; dow < 7; dow++) {
-                let date = week * 7 + dow - dayOfWeek + 1;
-                if (date < 1 || date > daysInMonth) {
-                    html += '<td class="bg-light"></td>';
-                } else {
-                    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(date).padStart(2,'0')}`;
-                    // Use h-100 w-100 to fill space, no padding, and flex column for vertical layout
-                    html += `<td class="h-100 w-100 align-top" style="vertical-align:top;"><div class="calendar-date d-flex flex-column align-items-start h-100 w-100" data-date="${dateStr}">
-                        <span class="fw-bold mb-1">${date}</span>`;
-                    // Show only appointments for this day, as a left-aligned, small, red list
-                    const appts = this.appointments.filter(a => {
-                        const apptDate = new Date(a.date);
-                        return apptDate.getFullYear() === year && apptDate.getMonth() === month && apptDate.getDate() === date;
-                    });
-                    if (appts.length > 0) {
-                        html += '<ul class="list-unstyled mb-0 w-100">';
-                        for (let a of appts) {
-                            html += `<li class="ps-2" style="font-size:0.85em;color:#c00;text-align:left;">${a.title}</li>`;
-                        }
-                        html += '</ul>';
+                let cellDate = new Date(year, month, date);
+                let isOtherMonth = cellDate.getMonth() !== month;
+                let cellClass = 'calendar-cell calendar-day-fixed';
+                if (isOtherMonth) cellClass += ' other-month';
+                if (
+                    cellDate.toDateString() === (new Date()).toDateString()
+                ) cellClass += ' today';
+                html += `<div class="${cellClass}" data-date="${cellDate.toISOString().split('T')[0]}">`;
+                html += `<div class="day-number">${cellDate.getDate()}</div>`;
+                // Appointments for this day
+                const dateStr = cellDate.toISOString().split('T')[0];
+                const appts = this.appointments.filter(a => {
+                    const apptDate = new Date(a.date);
+                    return apptDate.toISOString().split('T')[0] === dateStr;
+                });
+                if (appts.length > 0) {
+                    html += '<ul class="calendar-appts">';
+                    for (let a of appts) {
+                        html += `<li class="calendar-appt">${a.title}</li>`;
                     }
-                    html += '</div></td>';
+                    html += '</ul>';
                 }
+                html += '</div>';
+                date++;
             }
-            html += '</tr>';
+            html += '</div>';
         }
-        html += '</tbody></table></div>';
+        html += '</div>'; // close calendar-grid-fixed
+        html += '</div>'; // close calendar-main-container
         calendarEl.innerHTML = html;
-        // Render summary below calendar
+        // Render summary at the top (now inside calendarEl)
         this.renderSummary();
         // Add event listeners for navigation and today
         document.getElementById('prev-month-btn').onclick = () => {
@@ -116,19 +138,10 @@ class CalendarManager {
             this.renderCalendar();
         };
         // Add click event to each date cell
-        document.querySelectorAll('.calendar-date').forEach(el => {
+        document.querySelectorAll('.calendar-day-fixed').forEach(el => {
             el.onclick = (e) => {
                 const dateStr = el.getAttribute('data-date');
-                window.openAppointmentModal(dateStr);
-            };
-        });
-        // Add delete event for local appointments
-        document.querySelectorAll('.btn-delete-appt').forEach(btn => {
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                const id = btn.getAttribute('data-appt-id');
-                this.deleteAppointment(id);
-                this.loadCalendar();
+                window.openAppointmentModal && window.openAppointmentModal(dateStr);
             };
         });
     }
@@ -138,8 +151,12 @@ class CalendarManager {
         const summaryEl = document.getElementById('calendar-summary');
         if (!summaryEl) return;
         const appts = this.appointments || [];
+        let html = '';
+        html += '<div class="card mb-3"><div class="card-body">';
         if (appts.length === 0) {
-            summaryEl.innerHTML = '<div class="alert alert-info text-center">No appointments scheduled.</div>';
+            html += '<div class="alert alert-info text-center mb-0">No appointments scheduled.</div>';
+            html += '</div></div>';
+            summaryEl.innerHTML = html;
             return;
         }
         // Group by date
@@ -148,10 +165,20 @@ class CalendarManager {
             if (!grouped[a.date]) grouped[a.date] = [];
             grouped[a.date].push(a);
         });
-        let html = '<h5 class="mb-3"><i class="bi bi-list-task me-2"></i>Appointments Summary</h5>';
+        html += '<h5 class="mb-3"><i class="bi bi-list-task me-2"></i>Appointments Summary</h5>';
         html += '<div class="accordion" id="appointmentsAccordion">';
-        let idx = 0;
-        Object.keys(grouped).sort().forEach(date => {
+        // Pagination logic
+        const allDates = Object.keys(grouped).sort();
+        const datesPerPage = 5;
+        // Track current page in the DOM
+        let currentPage = parseInt(summaryEl.getAttribute('data-page') || '1', 10);
+        const totalPages = Math.max(1, Math.ceil(allDates.length / datesPerPage));
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+        const startIdx = (currentPage - 1) * datesPerPage;
+        const endIdx = startIdx + datesPerPage;
+        let idx = startIdx;
+        allDates.slice(startIdx, endIdx).forEach(date => {
             const collapseId = `collapse${idx}`;
             const headingId = `heading${idx}`;
             html += `
@@ -170,9 +197,14 @@ class CalendarManager {
                         <span class="fw-bold">${a.title}</span>
                         ${a.time ? `<span class=\"badge bg-secondary ms-2\">${a.time}</span>` : ''}
                         ${a.notes ? `<span class=\"text-muted ms-2\">(${a.notes})</span>` : ''}
-                    </div>
-                    <span class="badge bg-info text-dark mt-2 mt-md-0">${a.module || ''}</span>
-                </li>`;
+                    </div>`;
+                // If appointment is "Manual", show delete button instead of label
+                if (a.module === 'Manual') {
+                    html += `<button class="btn btn-sm btn-danger ms-2 delete-appt-btn" data-appt-id="${a._id || a.id}" title="Delete Appointment"><i class="bi bi-trash"></i></button>`;
+                } else {
+                    html += `<span class="badge bg-info text-dark mt-2 mt-md-0">${a.module || ''}</span>`;
+                }
+                html += `</li>`;
             });
             html += `</ul>
                     </div>
@@ -181,7 +213,37 @@ class CalendarManager {
             idx++;
         });
         html += '</div>';
+        // Pagination controls
+        html += '<div class="d-flex justify-content-between align-items-center mt-3">';
+        html += `<button class="btn btn-sm btn-outline-secondary" id="summary-prev-page" ${currentPage === 1 ? 'disabled' : ''}>&laquo; Prev</button>`;
+        html += `<span>Page ${currentPage} of ${totalPages}</span>`;
+        html += `<button class="btn btn-sm btn-outline-secondary" id="summary-next-page" ${currentPage === totalPages ? 'disabled' : ''}>Next &raquo;</button>`;
+        html += '</div>';
+        html += '</div></div>';
         summaryEl.innerHTML = html;
+        summaryEl.setAttribute('data-page', currentPage);
+        // Add event listeners for pagination
+        const prevBtn = document.getElementById('summary-prev-page');
+        const nextBtn = document.getElementById('summary-next-page');
+        if (prevBtn) prevBtn.onclick = () => {
+            summaryEl.setAttribute('data-page', currentPage - 1);
+            this.renderSummary();
+        };
+        if (nextBtn) nextBtn.onclick = () => {
+            summaryEl.setAttribute('data-page', currentPage + 1);
+            this.renderSummary();
+        };
+        // Add event listeners for delete buttons (Manual appointments)
+        summaryEl.querySelectorAll('.delete-appt-btn').forEach(btn => {
+            btn.onclick = async (e) => {
+                e.stopPropagation();
+                const apptId = btn.getAttribute('data-appt-id');
+                if (apptId && window.calendarManager) {
+                    await window.calendarManager.deleteAppointment(apptId);
+                    await window.calendarManager.loadCalendar();
+                }
+            };
+        });
     }
 }
 
@@ -272,30 +334,57 @@ window.openAppointmentModal = function(dateStr) {
     document.getElementById('appointment-notes').value = '';
     document.getElementById('appointment-date').value = dateStr;
 
-    // Show appointments for this date in the modal
-    const appointmentsList = document.getElementById('appointments-list');
-    if (appointmentsList && window.calendarManager) {
-        const appts = (window.calendarManager.appointments || []).filter(a => a.date === dateStr);
-        if (appts.length > 0) {
-            appointmentsList.innerHTML = '<div class="mb-2"><strong>Appointments for this date:</strong></div>' +
-                appts.map(a => `<div class='alert alert-info py-1 px-2 mb-1'><b>${a.title}</b>${a.time ? ' @ ' + a.time : ''}<br><small>${a.notes || ''}</small></div>`).join('');
-        } else {
-            appointmentsList.innerHTML = '';
+    // Helper to render appointments list in the modal
+    function renderAppointmentsList(dateStr) {
+        const appointmentsList = document.getElementById('appointments-list');
+        if (appointmentsList && window.calendarManager) {
+            const appts = (window.calendarManager.appointments || []).filter(a => a.date === dateStr);
+            if (appts.length > 0) {
+                appointmentsList.innerHTML = '<div class="mb-2"><strong>Appointments for this date:</strong></div>' +
+                    appts.map(a => `
+                        <div class='alert alert-info py-1 px-2 mb-1 d-flex justify-content-between align-items-center'>
+                            <div>
+                                <b>${a.title}</b>${a.time ? ' @ ' + a.time : ''}<br><small>${a.notes || ''}</small>
+                            </div>
+                            <button class="btn btn-sm btn-danger ms-2 delete-appt-btn" data-appt-id="${a._id || a.id}"><i class="bi bi-trash"></i></button>
+                        </div>
+                    `).join('');
+            } else {
+                appointmentsList.innerHTML = '';
+            }
+            // Add delete handlers
+            setTimeout(() => {
+                document.querySelectorAll('.delete-appt-btn').forEach(btn => {
+                    btn.onclick = async (e) => {
+                        e.stopPropagation();
+                        const apptId = btn.getAttribute('data-appt-id');
+                        if (apptId && window.calendarManager) {
+                            await window.calendarManager.deleteAppointment(apptId);
+                            await window.calendarManager.loadCalendar();
+                            // Only update the list, don't reopen the modal
+                            renderAppointmentsList(dateStr);
+                        }
+                    };
+                });
+            }, 0);
         }
     }
+
+    // Render appointments list in the modal
+    renderAppointmentsList(dateStr);
+
     // Show modal
     const bsModal = new bootstrap.Modal(modal);
     bsModal.show();
     // Save handler
-    document.getElementById('save-appointment-btn').onclick = () => {
+    document.getElementById('save-appointment-btn').onclick = async () => {
         const title = document.getElementById('appointment-title').value.trim();
         const date = document.getElementById('appointment-date').value;
         const time = document.getElementById('appointment-time').value;
         const notes = document.getElementById('appointment-notes').value.trim();
         if (!title || !date) return;
-        // Save to localStorage
+        // Save to backend
         const appt = {
-            id: 'appt-' + Date.now() + '-' + Math.floor(Math.random()*10000),
             title,
             date,
             time,
@@ -303,8 +392,8 @@ window.openAppointmentModal = function(dateStr) {
             module: 'Manual'
         };
         if (window.calendarManager) {
-            window.calendarManager.saveAppointment(appt);
-            window.calendarManager.loadCalendar();
+            await window.calendarManager.saveAppointment(appt);
+            await window.calendarManager.loadCalendar();
         }
         bsModal.hide();
     };
