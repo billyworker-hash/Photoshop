@@ -103,13 +103,20 @@ class DepositorManager {    constructor(apiManager) {
                 row.dataset.depositorId = depositor._id;
                   // Add click event listener to open depositor modal, but ignore clicks on dropdowns
                 const rowClickHandler = (e) => {
-                    // Don't trigger if the click was on a dropdown or its elements
-                    if (e.target.classList.contains('depositor-status-dropdown') || 
-                        e.target.closest('.depositor-status-dropdown')) {
+                    // Don't trigger if the click was on a dropdown, phone link/button, or their elements
+                    if (
+                        e.target.classList.contains('depositor-status-dropdown') ||
+                        e.target.closest('.depositor-status-dropdown') ||
+                        e.target.classList.contains('phone-link') ||
+                        e.target.closest('.phone-link') ||
+                        e.target.classList.contains('big-phone-link') ||
+                        e.target.closest('.big-phone-link')
+                    ) {
                         return;
                     }
                     this.openDepositorNotesModal(depositor);
-                };                row.addEventListener('click', rowClickHandler);
+                };
+                row.addEventListener('click', rowClickHandler);
                 
                 tableBody.appendChild(row);            });
             

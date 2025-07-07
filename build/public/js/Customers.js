@@ -102,13 +102,20 @@ class CustomerManager {
                 tableBody.appendChild(row);
                 // Add event listener to the entire row to open notes modal, but ignore clicks on dropdowns
                 const rowClickHandler = (e) => {
-                    // Don't trigger if the click was on a dropdown or its elements
-                    if (e.target.classList.contains('customer-status-dropdown') ||
-                        e.target.closest('.customer-status-dropdown')) {
+                    // Don't trigger if the click was on a dropdown, phone link/button, or their elements
+                    if (
+                        e.target.classList.contains('customer-status-dropdown') ||
+                        e.target.closest('.customer-status-dropdown') ||
+                        e.target.classList.contains('phone-link') ||
+                        e.target.closest('.phone-link') ||
+                        e.target.classList.contains('big-phone-link') ||
+                        e.target.closest('.big-phone-link')
+                    ) {
                         return;
                     }
                     this.openCustomerNotesModal(customer);
-                }; row.addEventListener('click', rowClickHandler);
+                };
+                row.addEventListener('click', rowClickHandler);
             });
 
             // Add event listeners to phone spans to enable click-to-call

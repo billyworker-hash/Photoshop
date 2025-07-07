@@ -407,49 +407,29 @@ class LeadsManager {
             // Make all leads clickable
             row.style.cursor = 'pointer';
 
-            if (isOwned) {
-                // Owned lead styling - make it visually distinct but still clickable
-                row.classList.add('owned-lead');
-                row.style.backgroundColor = '#f8f9fa';
-                // Remove opacity reduction to make it more clickable                // Add event listener to open lead notes modal for owned leads
-                const ownedRowClickHandler = (e) => {
-                    // Don't trigger if the click was on a dropdown, phone link, or their elements
-                    if (e.target.classList.contains('lead-status-dropdown') ||
-                        e.target.closest('.lead-status-dropdown') ||
-                        e.target.classList.contains('phone-link') ||
-                        e.target.closest('.phone-link')) {
-                        return;
-                    }
+            // Unified row click handler for both owned and unowned leads
+            const rowClickHandler = (e) => {
+                // Don't trigger if the click was on a dropdown, phone link, or their elements
+                if (
+                    e.target.classList.contains('lead-status-dropdown') ||
+                    e.target.closest('.lead-status-dropdown') ||
+                    e.target.classList.contains('phone-link') ||
+                    e.target.closest('.phone-link')
+                ) {
+                    return;
+                }
+                if (isOwned) {
                     this.openLeadNotesModal(lead);
-                };
-                row.addEventListener('click', ownedRowClickHandler);
-
-                // Track this event listener for cleanup
-                this.eventListeners.push({
-                    element: row,
-                    event: 'click',
-                    handler: ownedRowClickHandler
-                });
-            } else {                // Unowned lead - clickable to open edit modal
-                const rowClickHandler = (e) => {
-                    // Don't trigger if the click was on a dropdown, phone link, or their elements
-                    if (e.target.classList.contains('lead-status-dropdown') ||
-                        e.target.closest('.lead-status-dropdown') ||
-                        e.target.classList.contains('phone-link') ||
-                        e.target.closest('.phone-link')) {
-                        return;
-                    }
+                } else {
                     this.openEditLeadModal(lead);
-                };
-                row.addEventListener('click', rowClickHandler);
-
-                // Track this event listener for cleanup
-                this.eventListeners.push({
-                    element: row,
-                    event: 'click',
-                    handler: rowClickHandler
-                });
-            }
+                }
+            };
+            row.addEventListener('click', rowClickHandler);
+            this.eventListeners.push({
+                element: row,
+                event: 'click',
+                handler: rowClickHandler
+            });
             tableBody.appendChild(row);
         });
 
@@ -2045,19 +2025,28 @@ generateLeadRow(lead) {
                 row.classList.add('owned-lead');
             }
 
-            // Add row click handler
-            const rowClickHandler = (e) => {
-                if (!e.target.closest('.dropdown') && !e.target.closest('button') && !e.target.closest('select')) {
-                    this.openEditLeadModal(lead);
-                }
-            };
-            row.addEventListener('click', rowClickHandler);
 
-            this.eventListeners.push({
-                element: row,
-                event: 'click',
-                handler: rowClickHandler
-            });
+        // Add row click handler (robust: do not open modal if clicking phone link or its children)
+        const rowClickHandler = (e) => {
+            // Prevent modal if clicking on phone link or any of its children
+            if (
+                e.target.closest('.phone-link') ||
+                e.target.closest('.big-phone-link') ||
+                e.target.closest('button') ||
+                e.target.closest('select') ||
+                e.target.closest('.dropdown')
+            ) {
+                return;
+            }
+            this.openEditLeadModal(lead);
+        };
+        row.addEventListener('click', rowClickHandler);
+
+        this.eventListeners.push({
+            element: row,
+            event: 'click',
+            handler: rowClickHandler
+        });
 
             tableBody.appendChild(row);
         });
