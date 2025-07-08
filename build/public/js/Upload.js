@@ -469,7 +469,7 @@ class UploadManager {
             // Add array-based custom fields
             Object.keys(customFieldArrays).forEach(fieldName => {
                 const array = customFieldArrays[fieldName];
-                customFields[fieldName] = array[i] || array[array.length - 1] || '';
+                customFields[fieldName] = (typeof array[i] !== 'undefined') ? array[i] : '';
             });
 
             // Combine firstName and lastName into fullName for the lead object
@@ -503,25 +503,25 @@ class UploadManager {
 
         const modalHtml = `
     <div class="modal fade" id="createListModal" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 420px;">
             <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header py-2">
                     <h5 class="modal-title">Create New Lead List</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form id="createListForm" onsubmit="event.preventDefault(); window.uploadManager.handleCreateList(event);">
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label class="form-label">List Name *</label>
-                            <input type="text" class="form-control" name="name" required 
+                    <div class="modal-body pt-2 pb-1">
+                        <div class="mb-2">
+                            <label class="form-label mb-1">List Name *</label>
+                            <input type="text" class="form-control form-control-sm" name="name" required 
                                    placeholder="e.g., leads2025, Q1 Prospects">
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Description</label>
-                            <textarea class="form-control" name="description" rows="3" 
+                        <div class="mb-2">
+                            <label class="form-label mb-1">Description</label>
+                            <textarea class="form-control form-control-sm" name="description" rows="2" 
                                       placeholder="Optional description for this lead list"></textarea>
                         </div>
-                        <div class="mb-3">
+                        <div class="mb-2">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" name="isVisibleToUsers" id="create-list-visible" checked>
                                 <label class="form-check-label" for="create-list-visible">
@@ -530,26 +530,27 @@ class UploadManager {
                                 <div class="form-text">When checked, all agents can see this list. When unchecked, you can choose specific agents.</div>
                             </div>
                         </div>
-                        <div class="mb-3" id="specific-agents-section" style="display: none;">
-                            <label class="form-label">Select Specific Agents</label>
-                            <div id="agents-selection" class="border rounded p-3">
+                        <div class="mb-2" id="specific-agents-section" style="display: none;">
+                            <label class="form-label mb-1">Select Specific Agents</label>
+                            <div id="agents-selection" class="border rounded p-2">
                                 <!-- Agent checkboxes will be loaded here -->
                             </div>
                             <div class="form-text">Choose which agents can see this list when not visible to all agents.</div>
                         </div>
-                        <hr>
-                        <h6>Custom Labels for this List</h6>
-                        <p class="text-muted">Define custom fields specific to this lead list.</p>
-                        <div id="create-labels-container">
+                        <hr class="my-2">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <h6 class="mb-0">Custom Labels</h6>
+                            <button type="button" class="btn btn-xs btn-outline-primary px-2 py-1" style="font-size:0.9em;" onclick="window.uploadManager.addCustomLabelToCreateModal()">
+                                <i class="bi bi-plus me-1"></i> Add
+                            </button>
+                        </div>
+                        <div id="create-labels-container" class="mb-1">
                             <!-- Custom labels will be added here -->
                         </div>
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="window.uploadManager.addCustomLabelToCreateModal()">
-                            <i class="bi bi-plus me-1"></i> Add Custom Label
-                        </button>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Create List</button>
+                    <div class="modal-footer py-2">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary btn-sm">Create List</button>
                     </div>
                 </form>
             </div>
@@ -672,75 +673,24 @@ class UploadManager {
         if (!container) return;
 
         const labelIndex = this.createLabelIndex; // Always use the incrementing index
-        this.createLabelIndex++; // Increment for next label
+        this.createLabelIndex++;
 
         const labelHtml = `
-        <div class="custom-label-row mb-3 p-3 border rounded">
-            <div class="row">
-                <div class="col-md-4">
-                    <label class="form-label">Field Name</label>
-                    <input type="text" class="form-control" name="labels[${labelIndex}][name]" 
-                           placeholder="e.g., companySize" required>
-                    <small class="text-muted">Internal field name (no spaces)</small>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Display Label</label>
-                    <input type="text" class="form-control" name="labels[${labelIndex}][label]" 
-                           placeholder="e.g., Company Size" required>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Field Type</label>
-                    <select class="form-select" name="labels[${labelIndex}][type]">
-                        <option value="text">Text</option>
-                        <option value="number">Number</option>
-                        <option value="email">Email</option>
-                        <option value="phone">Phone</option>
-                        <option value="select">Select</option>
-                        <option value="textarea">Textarea</option>
-                    </select>
-                </div>
-                <div class="col-md-1">
-                    <label class="form-label">&nbsp;</label>
-                    <button type="button" class="btn btn-sm btn-outline-danger d-block" 
-                            onclick="this.closest('.custom-label-row').remove()">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
+        <div class="custom-label-row row align-items-center g-2 mb-1">
+            <div class="col-9">
+                <input type="text" class="form-control form-control-sm" name="labels[${labelIndex}][name]" 
+                       placeholder="Field Name (e.g., Company Size)" required>
             </div>
-            <div class="row mt-2">
-                <div class="col-md-6">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="labels[${labelIndex}][required]" value="true">
-                        <label class="form-check-label">Required field</label>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <input type="text" class="form-control" name="labels[${labelIndex}][options]" 
-                           placeholder="Options (comma separated)" style="display: none;">
-                    <small class="text-muted" style="display: none;">For select fields only</small>
-                </div>
+            <div class="col-3 text-end">
+                <button type="button" class="btn btn-xs btn-outline-danger px-2 py-1" style="font-size:0.9em;" 
+                        onclick="this.closest('.custom-label-row').remove()" title="Remove">
+                    <i class="bi bi-trash"></i>
+                </button>
             </div>
         </div>
     `;
 
         container.insertAdjacentHTML('beforeend', labelHtml);
-
-        // Add event listener for type change
-        const typeSelect = container.lastElementChild.querySelector('select[name*="[type]"]');
-        const optionsInput = container.lastElementChild.querySelector('input[name*="[options]"]');
-        const optionsHelp = container.lastElementChild.querySelector('small');
-
-        typeSelect.addEventListener('change', function () {
-            if (this.value === 'select') {
-                optionsInput.style.display = 'block';
-                optionsHelp.style.display = 'block';
-                optionsInput.required = true;
-            } else {
-                optionsInput.style.display = 'none';
-                optionsHelp.style.display = 'none';
-                optionsInput.required = false;
-            }
-        });
     }
 
     // Add default labels to create form
@@ -752,29 +702,21 @@ class UploadManager {
         this.createLabelIndex = 0; // Reset index when opening modal
 
         const defaultLabels = [
-            { name: 'firstName', label: 'First Name', type: 'text', required: true },
-            { name: 'lastName', label: 'Last Name', type: 'text', required: true },
-            { name: 'email', label: 'Email', type: 'email', required: false },
-            { name: 'phone', label: 'Phone', type: 'text' },
-            { name: 'currency', label: 'Currency', type: 'text' },
-            { name: 'amount', label: 'Amount', type: 'number' },
-            { name: 'date', label: 'Date', type: 'text' },
-            { name: 'brand', label: 'Brand', type: 'text' }
+            { name: 'firstName', label: 'First Name' },
+            { name: 'lastName', label: 'Last Name' },
+            { name: 'email', label: 'Email' },
+            { name: 'phone', label: 'Phone' },
+            { name: 'amount', label: 'Amount' },
+            { name: 'date', label: 'Date' },
+            { name: 'brand', label: 'Brand' }
         ];
 
         defaultLabels.forEach((defaultLabel) => {
-            const labelIndex = this.createLabelIndex; // Store before increment
             this.addCustomLabelToCreateModal();
             const lastRow = container.lastElementChild;
-
-            lastRow.querySelector(`input[name="labels[${labelIndex}][name]"]`).value = defaultLabel.name;
-            lastRow.querySelector(`input[name="labels[${labelIndex}][label]"]`).value = defaultLabel.label;
-            lastRow.querySelector(`select[name="labels[${labelIndex}][type]"]`).value = defaultLabel.type;
-
-            if (defaultLabel.required) {
-                lastRow.querySelector(`input[name="labels[${labelIndex}][required]"]`).checked = true;
-            }
-            // this.createLabelIndex++; // Do NOT increment here, it's already incremented in addCustomLabelToCreateModal
+            // Only set the name field, which is used for both name and label
+            const nameInput = lastRow.querySelector(`input[name="labels[${this.createLabelIndex-1}][name]"]`);
+            if (nameInput) nameInput.value = defaultLabel.label;
         });
     }
 
@@ -792,41 +734,18 @@ class UploadManager {
         if (!isVisibleToUsers) {
             const agentCheckboxes = document.querySelectorAll('input[name="specificAgents"]:checked');
             visibleToSpecificAgents = Array.from(agentCheckboxes).map(checkbox => checkbox.value);
-        }        // Process custom labels
+        }
+        // Process custom labels (Field Name only, used for both name and label)
         const labels = [];
         const container = document.getElementById('create-labels-container');
         const labelRows = container?.querySelectorAll('.custom-label-row') || [];
 
         labelRows.forEach((row) => {
-            // Extract the actual index from the input name attribute
             const nameInput = row.querySelector('input[name*="[name]"]');
             if (!nameInput) return;
-
-            const nameAttr = nameInput.getAttribute('name');
-            const indexMatch = nameAttr.match(/labels\[(\d+)\]/);
-            if (!indexMatch) return;
-
-            const actualIndex = indexMatch[1];
-
-            const labelName = formData.get(`labels[${actualIndex}][name]`);
-            const labelLabel = formData.get(`labels[${actualIndex}][label]`);
-            const labelType = formData.get(`labels[${actualIndex}][type]`);
-            const labelRequired = formData.get(`labels[${actualIndex}][required]`) === 'true';
-            const labelOptions = formData.get(`labels[${actualIndex}][options]`);
-
-            if (labelName && labelLabel) {
-                const label = {
-                    name: labelName.trim(),
-                    label: labelLabel.trim(),
-                    type: labelType,
-                    required: labelRequired
-                };
-
-                if (labelType === 'select' && labelOptions) {
-                    label.options = labelOptions.split(',').map(opt => opt.trim()).filter(opt => opt.length > 0);
-                }
-
-                labels.push(label);
+            const value = nameInput.value.trim();
+            if (value) {
+                labels.push({ name: value, label: value });
             }
         });
 

@@ -1141,11 +1141,51 @@ generateLeadRow(lead) {
         var releaseLeadBtn = document.getElementById('release-lead-btn');
         var transferLeadBtn = document.getElementById('transfer-lead-btn');
 
-        // Clear previous note textarea
+        // Clear previous note textarea and handle disabling for owned leads
         var noteContent = document.getElementById('lead-note-content');
+        var noteStatus = document.getElementById('lead-note-status');
+        // Use variables only if not already declared in this scope
+        let _currentUser = this.apiManager.getCurrentUser();
+        let _isLeadOwned = lead.assignedTo && lead.assignedTo._id;
         if (noteContent) {
             noteContent.value = '';
+            // Grey out (disable) Add Note if lead is owned
+            if (_isLeadOwned) {
+                noteContent.disabled = true;
+                noteContent.placeholder = 'Notes can only be added after owning (see Customers tab)';
+            } else {
+                noteContent.disabled = false;
+                noteContent.placeholder = '';
+            }
         }
+        // Grey out (disable) status dropdown if lead is owned
+        if (noteStatus) {
+            if (_isLeadOwned) {
+                noteStatus.disabled = true;
+                noteStatus.title = 'Status can only be changed after owning (see Customers tab)';
+            } else {
+                noteStatus.disabled = false;
+                noteStatus.title = '';
+            }
+        }
+        // Also grey out status in table row for owned leads
+        setTimeout(() => {
+            try {
+                const row = document.querySelector(`tr[data-lead-id='${lead._id}']`);
+                if (row) {
+                    const statusDropdown = row.querySelector('.lead-status-dropdown');
+                    if (statusDropdown) {
+                        if (_isLeadOwned) {
+                            statusDropdown.disabled = true;
+                            statusDropdown.title = 'Status can only be changed after owning (see Customers tab)';
+                        } else {
+                            statusDropdown.disabled = false;
+                            statusDropdown.title = '';
+                        }
+                    }
+                }
+            } catch (e) {}
+        }, 0);
 
         // Set lead ID and status
         if (leadNoteId) {
@@ -1345,21 +1385,14 @@ generateLeadRow(lead) {
             container.appendChild(noteDiv);
         });
     }
-    // Save lead note
+    // Save lead note (add note or update status) - now renders instantly and does not close modal
     async saveLeadNote(leadId) {
         const noteContent = document.getElementById('lead-note-content').value.trim();
         const noteStatus = document.getElementById('lead-note-status').value;
 
-        // Note content is optional, but we need to update the status
         try {
-            // Get the current user
             const currentUser = this.apiManager.getCurrentUser();
-
-            // Prepare the data - only include the note if there's content
-            const data = {
-                status: noteStatus
-            };
-            // Only add the note if there's actual content
+            const data = { status: noteStatus };
             if (noteContent) {
                 data.note = {
                     content: noteContent,
@@ -1379,16 +1412,28 @@ generateLeadRow(lead) {
                 throw new Error('Failed to update lead');
             }
 
-            // Close modal and reload leads
-            const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
-            if (modal) modal.hide();
+            // Do NOT close the modal here
 
-            // Reload leads
-            this.loadLeads();
-            // Show success message
-            const message = noteContent ? 'Note added successfully' : 'Status updated successfully';
-            this.apiManager.showAlert(message, 'success');
+            // Update the notes in the modal instantly
+            const updatedLead = await response.json();
+            const leadNotesContainer = document.getElementById('lead-notes-container');
+            if (leadNotesContainer) {
+                this.displayLeadNotes(updatedLead, leadNotesContainer);
+            }
 
+            // Clear the textarea after saving
+            const noteContentInput = document.getElementById('lead-note-content');
+            if (noteContentInput) noteContentInput.value = '';
+
+
+            // Show generic saved message
+            this.showSavedToast();
+
+            // Only show status toast if status was actually changed
+            const prevStatus = this.currentLeads?.find(l => l._id === leadId)?.status;
+            if (noteStatus && prevStatus && noteStatus !== prevStatus) {
+                this.showStatusUpdateToast(noteStatus);
+            }
         } catch (err) {
             console.error('Error updating lead:', err);
             this.apiManager.showAlert('Failed to update lead: ' + err.message, 'danger');
@@ -1758,6 +1803,34 @@ generateLeadRow(lead) {
     }
 
     // Show status update toast notification
+    // Show a green toast for generic save actions ("Saved !")
+    showSavedToast() {
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+            toastContainer.style.zIndex = 1080;
+            document.body.appendChild(toastContainer);
+        }
+        const toastId = 'saved-toast-' + Date.now();
+        const toastHtml = `
+            <div id="${toastId}" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="bi bi-check-circle me-2"></i> Saved !
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        const toastElement = document.getElementById(toastId);
+        const toast = new bootstrap.Toast(toastElement, { delay: 2000 });
+        toast.show();
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
+    }
     showStatusUpdateToast(status) {
         // Create toast container if it doesn't exist
         let toastContainer = document.querySelector('.toast-container');

@@ -447,23 +447,16 @@ class DepositorManager {    constructor(apiManager) {
         const noteContent = document.getElementById('lead-note-content').value.trim();
         const noteStatus = document.getElementById('lead-note-status').value;
         
-        // Note content is optional, but we need to update the status
         try {
-            // Get the current user
             const currentUser = this.apiManager.getCurrentUser();
-            
-            // Prepare the data - only include the note if there's content
-            const data = {
-                status: noteStatus
-            };
-              // Only add the note if there's actual content
+            const data = { status: noteStatus };
             if (noteContent) {
                 data.note = {
                     content: noteContent,
                     createdBy: currentUser ? currentUser.id : null
                 };
             }
-            
+
             const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/depositors/${depositorId}/notes`, {
                 method: 'POST',
                 headers: {
@@ -471,22 +464,34 @@ class DepositorManager {    constructor(apiManager) {
                 },
                 body: JSON.stringify(data)
             });
-            
+
             if (!response.ok) {
                 throw new Error('Failed to update depositor');
             }
-            
-            // Close modal and reload depositors
-            const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
-            if (modal) modal.hide();
-            
-            // Reload depositors
-            this.loadDepositors();
-            
-            // Show success message
-            const message = noteContent ? 'Note added successfully' : 'Status updated successfully';
-            this.apiManager.showAlert(message, 'success');
-            
+
+            // Update the notes in the modal instantly
+            const updatedDepositor = await response.json();
+            const notesContainer = document.getElementById('lead-notes-container');
+            if (notesContainer) {
+                this.displayDepositorNotes(updatedDepositor, notesContainer);
+            }
+
+            // Clear the textarea after saving
+            const noteContentInput = document.getElementById('lead-note-content');
+            if (noteContentInput) noteContentInput.value = '';
+
+            // Show generic saved message
+            if (typeof this.showSavedToast === 'function') {
+                this.showSavedToast();
+            } else {
+                this.apiManager.showAlert('Saved !', 'success');
+            }
+
+            // Only show status toast if status was actually changed
+            const prevStatus = this.allDepositors?.find(d => d._id === depositorId)?.status;
+            if (noteStatus && prevStatus && noteStatus !== prevStatus && typeof this.showStatusUpdateToast === 'function') {
+                this.showStatusUpdateToast(noteStatus);
+            }
         } catch (err) {
             console.error('Error updating depositor:', err);
             this.apiManager.showAlert(`Failed to update depositor: ${err.message}`, 'danger');

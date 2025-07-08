@@ -452,17 +452,9 @@ class CustomerManager {
         const noteContent = document.getElementById('lead-note-content').value.trim();
         const noteStatus = document.getElementById('lead-note-status').value;
 
-        // Note content is optional, but we need to update the status
         try {
-            // Get the current user
             const currentUser = this.apiManager.getCurrentUser();
-
-            // Prepare the data - only include the note if there's content
-            const data = {
-                status: noteStatus
-            };
-
-            // Only add the note if there's actual content
+            const data = { status: noteStatus };
             if (noteContent) {
                 data.note = {
                     content: noteContent,
@@ -482,13 +474,29 @@ class CustomerManager {
                 throw new Error('Failed to save customer note');
             }
 
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
-            if (modal) modal.hide();
+            // Update the notes in the modal instantly
+            const updatedCustomer = await response.json();
+            const notesContainer = document.getElementById('lead-notes-container');
+            if (notesContainer) {
+                this.displayCustomerNotes(updatedCustomer, notesContainer);
+            }
 
-            // Reload customers to reflect changes
-            this.loadCustomers();
-            this.apiManager.showAlert('Note saved successfully', 'success');
+            // Clear the textarea after saving
+            const noteContentInput = document.getElementById('lead-note-content');
+            if (noteContentInput) noteContentInput.value = '';
+
+            // Show generic saved message
+            if (typeof this.showSavedToast === 'function') {
+                this.showSavedToast();
+            } else {
+                this.apiManager.showAlert('Saved !', 'success');
+            }
+
+            // Only show status toast if status was actually changed
+            const prevStatus = this.allCustomers?.find(c => c._id === customerId)?.status;
+            if (noteStatus && prevStatus && noteStatus !== prevStatus && typeof this.showStatusUpdateToast === 'function') {
+                this.showStatusUpdateToast(noteStatus);
+            }
         } catch (err) {
             console.error('Error saving customer note:', err);
             this.apiManager.showAlert('Failed to save note: ' + err.message, 'danger');
