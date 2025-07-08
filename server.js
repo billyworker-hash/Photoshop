@@ -16,7 +16,10 @@ app.use(express.json({ limit: '50mb' })); // Increased limit for bulk lead uploa
 app.use(express.static(path.join(__dirname, 'public')));
 
 mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log('MongoDB connected successfully'))
+    .then(async () => {
+        console.log('MongoDB connected successfully');
+        await ensureUsersWithNoListExists();
+    })
     .catch(err => {
         console.error('MongoDB connection error:', err);
         process.exit(1); // Exit with error if MongoDB connection fails
@@ -2151,13 +2154,6 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-// Initialize system lists on startup
-mongoose.connection.once('open', async () => {
-    console.log('MongoDB connected successfully');
-    // Ensure system lists exist
-    await ensureUsersWithNoListExists();
 
-    console.log('System initialization complete');
-});
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

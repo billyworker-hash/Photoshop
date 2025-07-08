@@ -1,10 +1,51 @@
 // CRM Frontend JavaScript - Main Application Controller
 // This file coordinates all modules and handles core application functionality
 
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', async function () {
+
+
+    function showInactivityLogoutModal() {
+        const modalEl = document.getElementById('inactivityLogoutModal');
+        if (!modalEl) {
+            handleLogout();
+            return;
+        }
+        const modal = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: false });
+        modal.show();
+
+        // When user clicks OK, proceed to logout
+        const okBtn = document.getElementById('inactivity-logout-ok-btn');
+        if (okBtn) {
+            okBtn.onclick = () => {
+                modal.hide();
+                handleLogout();
+            };
+        }
+    }
+
+    // --- Inactivity auto-logout ---
+    let inactivityTimeout;
+    const INACTIVITY_LIMIT_MS = 30 * 60 * 1000; // 30 minutes (change to 5000 for testing)
+
+    function resetInactivityTimer() {
+        clearTimeout(inactivityTimeout);
+        inactivityTimeout = setTimeout(() => {
+            showInactivityLogoutModal();
+        }, INACTIVITY_LIMIT_MS);
+    }
+
+    // Listen for user activity
+    ['mousemove', 'keydown', 'mousedown', 'touchstart'].forEach(event => {
+        window.addEventListener(event, resetInactivityTimer, true);
+    });
+
+    // Start timer on load
+    resetInactivityTimer();
+
+
     // Wait for apiManager to be available
     await waitForApiManager();
-      // Check authentication FIRST before doing anything else
+    // Check authentication FIRST before doing anything else
     if (!window.apiManager.token || !window.apiManager.isTokenValid()) {
         // Hide loading screen before redirecting
         const loadingScreen = document.getElementById('loading-screen');
@@ -16,18 +57,18 @@ document.addEventListener('DOMContentLoaded', async function() {
         window.location.href = '/login';
         return;
     }
-    
+
     // Only proceed if authenticated
     try {
         // Initialize all managers
         await initializeManagers();
-        
+
         // Show the app
         await showApp();
-        
+
         // Set up event listeners
         setupEventListeners();
-        
+
         // Set up navigation
         setupNavigation();
     } catch (error) {
@@ -48,7 +89,7 @@ function waitForApiManager() {
             resolve();
             return;
         }
-        
+
         const checkApiManager = () => {
             if (window.apiManager) {
                 resolve();
@@ -56,7 +97,7 @@ function waitForApiManager() {
                 setTimeout(checkApiManager, 10);
             }
         };
-        
+
         checkApiManager();
     });
 }
@@ -85,7 +126,7 @@ async function initializeManagers() {
     if (!window.calendarManager) {
         window.calendarManager = new CalendarManager(window.apiManager);
     }
-    
+
     // Initialize upload manager (async)
     await window.uploadManager.init();
 }
@@ -94,12 +135,12 @@ async function initializeManagers() {
 function setupEventListeners() {
     // Logout button
     document.getElementById('logout-btn')?.addEventListener('click', handleLogout);
-    
+
     // Lead management buttons
     document.getElementById('save-lead-btn')?.addEventListener('click', () => window.leadsManager.handleAddLead());
     document.getElementById('update-lead-btn')?.addEventListener('click', () => window.leadsManager.handleUpdateLead());
     // NOTE: save-lead-note-btn listener removed - handled by modal-specific setup in Leads.js
-      // User management buttons
+    // User management buttons
     document.getElementById('save-user-btn')?.addEventListener('click', handleAddUser);
     document.getElementById('update-user-btn')?.addEventListener('click', handleUpdateUser);
 }
@@ -107,11 +148,11 @@ function setupEventListeners() {
 // Set up navigation between pages
 function setupNavigation() {
     document.querySelectorAll('.sidebar .nav-link[data-page]').forEach(link => {
-        link.addEventListener('click', function(e) {
+        link.addEventListener('click', function (e) {
             e.preventDefault();
             const page = this.getAttribute('data-page');
             showPage(page);
-            
+
             // Update active status
             document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
             this.classList.add('active');
@@ -121,7 +162,9 @@ function setupNavigation() {
 
 // Handle user logout
 function handleLogout(e) {
-    e.preventDefault();
+    if (e && typeof e.preventDefault === 'function') {
+        e.preventDefault();
+    }
     window.apiManager.clearToken();
     window.location.href = '/login';
 }
@@ -133,20 +176,20 @@ async function showApp() {
         const currentUser = window.apiManager.getCurrentUser();
 
         // Validate token with server
-        const response = await window.apiManager.authenticatedFetch(`${window.apiManager.API_URL}/dashboard/stats`);        if (!response.ok) {
+        const response = await window.apiManager.authenticatedFetch(`${window.apiManager.API_URL}/dashboard/stats`); if (!response.ok) {
             throw new Error('Invalid token');
         }        // Hide loading screen and show the app
         const loadingScreen = document.getElementById('loading-screen');
         const appContent = document.getElementById('app-content');
-          if (loadingScreen) {
+        if (loadingScreen) {
             loadingScreen.classList.remove('d-flex');
             loadingScreen.classList.add('d-none');
         }
-        
+
         if (appContent) {
             appContent.classList.remove('d-none');
         }
-        
+
         // Update UI with user information
         updateUserInterface(currentUser);
 
@@ -179,7 +222,7 @@ function toggleAdminFeatures(isAdmin) {
     const addLeadBtn = document.getElementById('add-lead-btn-container');
     const customersTab = document.getElementById('customers-tab');
     const depositorsTab = document.getElementById('depositors-tab');
-    
+
     if (adminMenu) adminMenu.style.display = isAdmin ? 'block' : 'none';
     if (addLeadBtn) addLeadBtn.style.display = isAdmin ? 'block' : 'none';
     // Hide Customers tab from admin users (customers are for agents only)
@@ -194,12 +237,12 @@ async function showPage(pageName) {
     if (window.dashboard) {
         window.dashboard.destroyCharts();
     }
-    
+
     // Stop auto-refresh for all managers when switching pages
     if (window.leadsManager) {
         window.leadsManager.setPageActive(false);
     }
-    
+
     // Hide all pages
     document.querySelectorAll('.page-content').forEach(page => {
         page.style.display = 'none';
@@ -217,7 +260,7 @@ async function showPage(pageName) {
         console.log(`Navigation updated for: ${pageName}`);
     }// Load data for the page
     const currentUser = window.apiManager.getCurrentUser();
-    switch(pageName) {
+    switch (pageName) {
         case 'dashboard':
             if (window.dashboard) {
                 window.dashboard.loadDashboardData();
@@ -228,7 +271,7 @@ async function showPage(pageName) {
                 window.leadsManager.setPageActive(true);
                 window.leadsManager.loadLeads();
             }
-            break;case 'customers':
+            break; case 'customers':
             // Only allow agents to access customers page
             if (currentUser && currentUser.role === 'agent' && window.customerManager) {
                 window.customerManager.loadCustomers();
@@ -280,11 +323,11 @@ async function showPage(pageName) {
 async function loadUsers() {
     try {
         const response = await window.apiManager.authenticatedFetch(`${window.apiManager.API_URL}/users`);
-        
+
         if (!response.ok) {
             throw new Error('Failed to fetch users');
         }
-        
+
         const users = await response.json();
         displayUsers(users);
     } catch (err) {
@@ -296,9 +339,9 @@ async function loadUsers() {
 function displayUsers(users) {
     const tableBody = document.getElementById('users-table-body');
     if (!tableBody) return;
-    
+
     tableBody.innerHTML = '';
-    
+
     users.forEach(user => {
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -325,15 +368,15 @@ function displayUsers(users) {
                     </button>
                 </div>
             </td>
-        `;        tableBody.appendChild(row);
-        
+        `; tableBody.appendChild(row);
+
         // Add event listeners to action buttons
         row.querySelector('.toggle-status-btn').addEventListener('click', (e) => {
             const userId = e.target.getAttribute('data-id');
             const currentStatus = e.target.getAttribute('data-status');
             toggleUserStatus(userId, currentStatus === 'active' ? 'inactive' : 'active');
         });
-        
+
         row.querySelector('.edit-user-btn').addEventListener('click', (e) => {
             const userId = e.target.getAttribute('data-id');
             const userName = e.target.getAttribute('data-name');
@@ -341,7 +384,7 @@ function displayUsers(users) {
             const userRole = e.target.getAttribute('data-role');
             openEditUserModal(userId, userName, userEmail, userRole);
         });
-        
+
         row.querySelector('.delete-user-btn').addEventListener('click', (e) => {
             const userId = e.target.getAttribute('data-id');
             const userName = e.target.getAttribute('data-name');
@@ -360,11 +403,11 @@ async function toggleUserStatus(userId, newStatus) {
             },
             body: JSON.stringify({ status: newStatus })
         });
-        
+
         if (!response.ok) {
             throw new Error('Failed to update user status');
         }
-        
+
         // Reload users
         loadUsers();
     } catch (err) {
@@ -380,7 +423,7 @@ async function handleAddUser() {
         email: document.getElementById('user-email')?.value || '',
         password: document.getElementById('user-password')?.value || '',
         role: document.getElementById('user-role')?.value || 'agent'
-    };    if (!userData.name || !userData.email || !userData.password) {
+    }; if (!userData.name || !userData.email || !userData.password) {
         window.apiManager.showAlert('Please fill in all required fields', 'warning');
         return;
     }
@@ -393,22 +436,22 @@ async function handleAddUser() {
             },
             body: JSON.stringify(userData)
         });
-        
+
         if (!response.ok) {
             throw new Error('Failed to add user');
         }
-        
+
         // Close modal and reload users
         const modal = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
         if (modal) modal.hide();
-        
+
         // Clear form
         const form = document.getElementById('add-user-form');
         if (form) form.reset();
-        
+
         // Reload users
         loadUsers();
-        
+
         window.apiManager.showAlert('User added successfully', 'success');
     } catch (err) {
         console.error('Error adding user:', err);
@@ -423,7 +466,7 @@ function openEditUserModal(userId, userName, userEmail, userRole) {
     document.getElementById('edit-user-email').value = userEmail;
     document.getElementById('edit-user-role').value = userRole;
     document.getElementById('edit-user-password').value = ''; // Clear password field
-    
+
     const editUserModal = new bootstrap.Modal(document.getElementById('editUserModal'));
     editUserModal.show();
 }
@@ -443,7 +486,7 @@ async function handleUpdateUser() {
         }
 
         const updateData = { name, email, role };
-        
+
         // Only include password if it was provided
         if (password) {
             updateData.password = password;
@@ -461,10 +504,11 @@ async function handleUpdateUser() {
             // Close modal
             const editUserModal = bootstrap.Modal.getInstance(document.getElementById('editUserModal'));
             editUserModal.hide();
-              // Reload users list
+            // Reload users list
             loadUsers();
-            
-            window.apiManager.showAlert('User updated successfully', 'success');        } else {
+
+            window.apiManager.showAlert('User updated successfully', 'success');
+        } else {
             const errorData = await response.json();
             window.apiManager.showAlert(errorData.message || 'Failed to update user', 'danger');
         }
@@ -477,11 +521,11 @@ async function handleUpdateUser() {
 // Delete user with confirmation
 async function deleteUser(userId, userName) {
     const confirmed = await window.confirmationModal.confirmDelete(
-        userName, 
-        'user', 
+        userName,
+        'user',
         'This action cannot be undone.'
     );
-    
+
     if (!confirmed) {
         return;
     }
@@ -512,7 +556,7 @@ async function deactivateAllUsers() {
         'Deactivate All Users',
         'This will deactivate all users except yourself. This action can be reversed by reactivating users individually.'
     );
-    
+
     if (!confirmed) {
         return;
     }
@@ -530,7 +574,7 @@ async function deactivateAllUsers() {
             // Reload users list to reflect changes
             loadUsers();
             window.apiManager.showAlert(
-                `Successfully deactivated ${result.deactivatedCount} user(s)`, 
+                `Successfully deactivated ${result.deactivatedCount} user(s)`,
                 'success'
             );
         } else {
@@ -548,20 +592,20 @@ function updateUserInterface(currentUser) {
     // Update sidebar user info
     const userNameSidebar = document.getElementById('user-name-sidebar');
     const userRoleSidebar = document.getElementById('user-role-sidebar');
-    
+
     if (userNameSidebar) {
         userNameSidebar.textContent = currentUser.name;
     }
     if (userRoleSidebar) {
         userRoleSidebar.textContent = currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
     }
-    
+
     // Update dashboard greeting
     const dashboardGreeting = document.getElementById('dashboard-greeting');
     if (dashboardGreeting) {
         const hour = new Date().getHours();
         let greeting = 'Good day';
-        
+
         if (hour < 12) {
             greeting = 'Good morning';
         } else if (hour < 17) {
@@ -569,13 +613,13 @@ function updateUserInterface(currentUser) {
         } else {
             greeting = 'Good evening';
         }
-        
+
         dashboardGreeting.textContent = `${greeting}, ${currentUser.name}!`;
     }
-    
+
     // Update current time
     updateCurrentTime();
-    
+
     // Set up time update interval
     setInterval(updateCurrentTime, 1000);
 }
@@ -597,38 +641,38 @@ function resetModalButtons() {
     const transferLeadBtn = document.getElementById('transfer-lead-btn');
     const moveToDepositorsBtn = document.getElementById('move-to-depositors-btn');
     const takeOverLeadBtn = document.getElementById('take-over-lead-btn');
-    
+
     // Hide all buttons by default
     if (ownLeadBtn) {
         ownLeadBtn.style.display = 'none';
         ownLeadBtn.textContent = 'Own Lead';
         ownLeadBtn.className = 'btn btn-success';
     }
-    
+
     if (releaseLeadBtn) {
         releaseLeadBtn.style.display = 'none';
         releaseLeadBtn.textContent = 'Release Lead';
         releaseLeadBtn.className = 'btn btn-warning';
     }
-    
+
     if (transferLeadBtn) {
         transferLeadBtn.style.display = 'none';
         transferLeadBtn.textContent = 'Transfer Lead';
         transferLeadBtn.className = 'btn btn-info';
     }
-    
+
     if (moveToDepositorsBtn) {
         moveToDepositorsBtn.style.display = 'none';
         moveToDepositorsBtn.textContent = 'Move to Depositors';
         moveToDepositorsBtn.className = 'btn btn-danger';
     }
-    
+
     if (takeOverLeadBtn) {
         takeOverLeadBtn.style.display = 'none';
         takeOverLeadBtn.textContent = 'Take over';
         takeOverLeadBtn.className = 'btn btn-warning';
     }
-    
+
     // Reset modal title
     const modalTitle = document.querySelector('#leadNotesModal .modal-title');
     if (modalTitle) {
@@ -672,7 +716,7 @@ function renderSimpleCalendar(appointments) {
     const daysInMonth = lastDay.getDate();
     // Build calendar grid
     let html = '<table class="table table-bordered"><thead><tr>';
-    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     for (let d of days) html += `<th>${d}</th>`;
     html += '</tr></thead><tbody><tr>';
     let dayOfWeek = firstDay.getDay();

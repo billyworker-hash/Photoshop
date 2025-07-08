@@ -404,6 +404,11 @@ class LeadsManager {
             // Check if lead is owned
             const isOwned = lead.assignedTo && lead.assignedTo._id;
 
+            // Apply owned-lead class immediately if owned
+            if (isOwned) {
+                row.classList.add('owned-lead');
+            }
+
             // Make all leads clickable
             row.style.cursor = 'pointer';
 
@@ -2049,6 +2054,36 @@ generateLeadRow(lead) {
         });
 
             tableBody.appendChild(row);
+        });
+        // Add event listeners to phone-link spans for click-to-call after rows are added
+        const phoneLinks = tableBody.querySelectorAll('.phone-link');
+        phoneLinks.forEach(span => {
+            const phoneLinkHandler = (e) => {
+                e.stopPropagation(); // Prevent the row click event
+                // Get the phone number from the data attribute
+                const phoneNumber = span.getAttribute('data-phone');
+                if (!phoneNumber) return;
+                const sipUrl = `sip:${phoneNumber}`;
+                try {
+                    // Create a temporary iframe to handle the SIP protocol
+                    const iframe = document.createElement('iframe');
+                    iframe.style.display = 'none';
+                    iframe.src = sipUrl;
+                    document.body.appendChild(iframe);
+                    setTimeout(() => {
+                        document.body.removeChild(iframe);
+                    }, 1000);
+                } catch (error) {
+                    // Fallback: try to open directly
+                    window.location.href = sipUrl;
+                }
+            };
+            span.addEventListener('click', phoneLinkHandler);
+            this.eventListeners.push({
+                element: span,
+                event: 'click',
+                handler: phoneLinkHandler
+            });
         });
 
         // Apply status colors to all dropdowns
