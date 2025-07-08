@@ -308,6 +308,8 @@ class CustomerManager {
         return status.charAt(0).toUpperCase() + status.slice(1);
     }    // Open customer notes modal (mirrors openLeadNotesModal)
     openCustomerNotesModal(customer) {
+        // Always keep a global reference to the last opened customer for modal sync
+        window.lastOpenedLead = customer;
         // Reset all modal buttons to ensure proper state
         if (typeof resetModalButtons === 'function') {
             resetModalButtons();
@@ -347,6 +349,7 @@ class CustomerManager {
         var noteContent = document.getElementById('lead-note-content');
         if (noteContent) {
             noteContent.value = '';
+            noteContent.disabled = false; // Always enable note field for customers
         }
 
         // Set customer ID and status
@@ -355,11 +358,57 @@ class CustomerManager {
         }
         if (customerNoteStatus) {
             customerNoteStatus.value = customer.status || 'active';
+            customerNoteStatus.disabled = false; // Always enable status field for customers
         }
 
         // Display previous notes if any
         if (customerNotesContainer) {
             this.displayCustomerNotes(customer, customerNotesContainer);
+        }
+
+        // Add "Expand Notes" button below the Previous Notes section
+        if (customerNotesContainer && !document.getElementById('open-notes-only-modal-btn')) {
+            const notesOnlyBtn = document.createElement('button');
+            notesOnlyBtn.type = 'button';
+            notesOnlyBtn.className = 'btn btn-sm btn-outline-primary mt-2';
+            notesOnlyBtn.id = 'open-notes-only-modal-btn';
+            notesOnlyBtn.innerHTML = '<i class="bi bi-arrows-fullscreen me-1"></i> Expand Notes';
+            // Insert after the notes container (below Previous Notes)
+            if (customerNotesContainer.nextSibling) {
+                customerNotesContainer.parentNode.insertBefore(notesOnlyBtn, customerNotesContainer.nextSibling);
+            } else {
+                customerNotesContainer.parentNode.appendChild(notesOnlyBtn);
+            }
+            notesOnlyBtn.onclick = () => {
+                let notesOnlyModalEl = document.getElementById('notesOnlyModal');
+                if (!notesOnlyModalEl) {
+                    notesOnlyModalEl = document.createElement('div');
+                    notesOnlyModalEl.className = 'modal fade';
+                    notesOnlyModalEl.id = 'notesOnlyModal';
+                    notesOnlyModalEl.tabIndex = -1;
+                    notesOnlyModalEl.innerHTML = `
+                        <div class="modal-dialog modal-lg modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">All Notes</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body" style="max-height:70vh; overflow-y:auto;">
+                                    <div id="notes-only-modal-container"></div>
+                                </div>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(notesOnlyModalEl);
+                }
+                // Always use the notes from the last opened customer object (kept in sync)
+                const notesOnlyContainer = document.getElementById('notes-only-modal-container');
+                if (notesOnlyContainer) {
+                    notesOnlyContainer.innerHTML = '';
+                    this.displayCustomerNotes(window.lastOpenedLead, notesOnlyContainer);
+                }
+                const notesOnlyModal = bootstrap.Modal.getOrCreateInstance(notesOnlyModalEl);
+                notesOnlyModal.show();
+            };
         }
 
         // Update modal title
@@ -382,7 +431,8 @@ class CustomerManager {
             newSaveBtn.addEventListener('click', () => {
                 this.saveCustomerNote(customer._id);
             });
-        }        // Add event listener to the release customer button
+        }
+        // Add event listener to the release customer button
         if (releaseLeadBtn) {
             // Remove any existing event listeners to prevent duplicates
             var newReleaseBtn = releaseLeadBtn.cloneNode(true);
@@ -479,6 +529,18 @@ class CustomerManager {
             const notesContainer = document.getElementById('lead-notes-container');
             if (notesContainer) {
                 this.displayCustomerNotes(updatedCustomer, notesContainer);
+            }
+
+            // --- Update the in-memory customer object in allCustomers ---
+            const idx = this.allCustomers.findIndex(c => c._id === customerId);
+            if (idx !== -1) {
+                this.allCustomers[idx].notes = updatedCustomer.notes;
+                this.allCustomers[idx].status = updatedCustomer.status;
+            }
+            // Also update window.lastOpenedLead if present and matches
+            if (window.lastOpenedLead && window.lastOpenedLead._id === customerId) {
+                window.lastOpenedLead.notes = updatedCustomer.notes;
+                window.lastOpenedLead.status = updatedCustomer.status;
             }
 
             // Clear the textarea after saving

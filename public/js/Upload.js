@@ -675,17 +675,18 @@ class UploadManager {
         const labelIndex = this.createLabelIndex; // Always use the incrementing index
         this.createLabelIndex++;
 
+        // More compact and narrow row, input, and button, with Delete button before the input
         const labelHtml = `
-        <div class="custom-label-row row align-items-center g-2 mb-1">
-            <div class="col-9">
-                <input type="text" class="form-control form-control-sm" name="labels[${labelIndex}][name]" 
-                       placeholder="Field Name (e.g., Company Size)" required>
-            </div>
-            <div class="col-3 text-end">
-                <button type="button" class="btn btn-xs btn-outline-danger px-2 py-1" style="font-size:0.9em;" 
+        <div class="custom-label-row row align-items-center g-1 mb-1" style="max-width: 320px; margin-left:0; margin-right:0; padding:0;">
+            <div class="col-4 text-end" style="padding-right:2px;">
+                <button type="button" class="btn btn-xs btn-outline-danger px-1 py-1" style="font-size:0.85em; min-width:28px; height:28px; line-height:1;" 
                         onclick="this.closest('.custom-label-row').remove()" title="Remove">
                     <i class="bi bi-trash"></i>
                 </button>
+            </div>
+            <div class="col-8" style="padding-left:2px;">
+                <input type="text" class="form-control form-control-sm" name="labels[${labelIndex}][name]" 
+                       placeholder="Field Name (e.g., Company Size)" required style="max-width: 150px; font-size:0.92em; padding:2px 6px; height:28px;">
             </div>
         </div>
     `;

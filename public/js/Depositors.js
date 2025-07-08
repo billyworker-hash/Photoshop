@@ -319,6 +319,8 @@ class DepositorManager {    constructor(apiManager) {
         return status.charAt(0).toUpperCase() + status.slice(1);
     }    // Open depositor notes modal (mirrors openCustomerNotesModal)
     openDepositorNotesModal(depositor) {
+        // Always keep a global reference to the last opened depositor for modal sync
+        window.lastOpenedLead = depositor;
         // Reset all modal buttons to ensure proper state
         if (typeof resetModalButtons === 'function') {
             resetModalButtons();
@@ -369,6 +371,51 @@ class DepositorManager {    constructor(apiManager) {
         // Display previous notes if any
         if (depositorNotesContainer) {
             this.displayDepositorNotes(depositor, depositorNotesContainer);
+        }
+
+        // Add "Expand Notes" button below the Previous Notes section
+        if (depositorNotesContainer && !document.getElementById('open-notes-only-modal-btn')) {
+            const notesOnlyBtn = document.createElement('button');
+            notesOnlyBtn.type = 'button';
+            notesOnlyBtn.className = 'btn btn-sm btn-outline-primary mt-2';
+            notesOnlyBtn.id = 'open-notes-only-modal-btn';
+            notesOnlyBtn.innerHTML = '<i class="bi bi-arrows-fullscreen me-1"></i> Expand Notes';
+            // Insert after the notes container (below Previous Notes)
+            if (depositorNotesContainer.nextSibling) {
+                depositorNotesContainer.parentNode.insertBefore(notesOnlyBtn, depositorNotesContainer.nextSibling);
+            } else {
+                depositorNotesContainer.parentNode.appendChild(notesOnlyBtn);
+            }
+            notesOnlyBtn.onclick = () => {
+                let notesOnlyModalEl = document.getElementById('notesOnlyModal');
+                if (!notesOnlyModalEl) {
+                    notesOnlyModalEl = document.createElement('div');
+                    notesOnlyModalEl.className = 'modal fade';
+                    notesOnlyModalEl.id = 'notesOnlyModal';
+                    notesOnlyModalEl.tabIndex = -1;
+                    notesOnlyModalEl.innerHTML = `
+                        <div class="modal-dialog modal-lg modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">All Notes</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body" style="max-height:70vh; overflow-y:auto;">
+                                    <div id="notes-only-modal-container"></div>
+                                </div>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(notesOnlyModalEl);
+                }
+                // Always use the notes from the last opened depositor object (kept in sync)
+                const notesOnlyContainer = document.getElementById('notes-only-modal-container');
+                if (notesOnlyContainer) {
+                    notesOnlyContainer.innerHTML = '';
+                    this.displayDepositorNotes(window.lastOpenedLead, notesOnlyContainer);
+                }
+                const notesOnlyModal = bootstrap.Modal.getOrCreateInstance(notesOnlyModalEl);
+                notesOnlyModal.show();
+            };
         }
         
         // Update modal title
@@ -474,6 +521,18 @@ class DepositorManager {    constructor(apiManager) {
             const notesContainer = document.getElementById('lead-notes-container');
             if (notesContainer) {
                 this.displayDepositorNotes(updatedDepositor, notesContainer);
+            }
+
+            // --- Update the in-memory depositor object in allDepositors ---
+            const idx = this.allDepositors.findIndex(d => d._id === depositorId);
+            if (idx !== -1) {
+                this.allDepositors[idx].notes = updatedDepositor.notes;
+                this.allDepositors[idx].status = updatedDepositor.status;
+            }
+            // Also update window.lastOpenedLead if present and matches
+            if (window.lastOpenedLead && window.lastOpenedLead._id === depositorId) {
+                window.lastOpenedLead.notes = updatedDepositor.notes;
+                window.lastOpenedLead.status = updatedDepositor.status;
             }
 
             // Clear the textarea after saving

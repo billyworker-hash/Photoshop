@@ -423,10 +423,14 @@ class LeadsManager {
                 ) {
                     return;
                 }
-                if (isOwned) {
-                    this.openLeadNotesModal(lead);
+                // Always get the latest lead object from currentLeads
+                const leadId = row.dataset.leadId;
+                const latestLead = this.currentLeads.find(l => l._id === leadId);
+                if (!latestLead) return;
+                if (latestLead.assignedTo && latestLead.assignedTo._id) {
+                    this.openLeadNotesModal(latestLead);
                 } else {
-                    this.openEditLeadModal(lead);
+                    this.openEditLeadModal(latestLead);
                 }
             };
             row.addEventListener('click', rowClickHandler);
@@ -726,172 +730,172 @@ class LeadsManager {
         this.displayLeads(this.currentLeads);
     }
 
-// Generate dynamic table headers
-generateTableHeaders(headerElement) {
-    if (!headerElement) return;
+    // Generate dynamic table headers
+    generateTableHeaders(headerElement) {
+        if (!headerElement) return;
 
-    headerElement.innerHTML = '';
+        headerElement.innerHTML = '';
 
-    let phoneLabels = [], otherLabels = [];
+        let phoneLabels = [], otherLabels = [];
 
-    if (this.selectedListId) {
-        const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);
-        if (selectedList && selectedList.labels && selectedList.labels.length > 0) {
-            phoneLabels = selectedList.labels.filter(label => this.isPhoneField(label.name));
-            otherLabels = selectedList.labels.filter(label => !this.isPhoneField(label.name));
+        if (this.selectedListId) {
+            const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);
+            if (selectedList && selectedList.labels && selectedList.labels.length > 0) {
+                phoneLabels = selectedList.labels.filter(label => this.isPhoneField(label.name));
+                otherLabels = selectedList.labels.filter(label => !this.isPhoneField(label.name));
+            }
+        } else {
+            // If no specific list is selected, show all possible labels from all lists
+            const allLabels = new Map();
+            this.allLeadLists.forEach(list => {
+                if (list.labels) {
+                    list.labels.forEach(label => {
+                        allLabels.set(label.name, label.label);
+                    });
+                }
+            });
+            allLabels.forEach((displayLabel, fieldName) => {
+                if (this.isPhoneField(fieldName)) {
+                    phoneLabels.push({ name: fieldName, label: displayLabel });
+                } else {
+                    otherLabels.push({ name: fieldName, label: displayLabel });
+                }
+            });
         }
-    } else {
-        // If no specific list is selected, show all possible labels from all lists
-        const allLabels = new Map();
-        this.allLeadLists.forEach(list => {
-            if (list.labels) {
-                list.labels.forEach(label => {
-                    allLabels.set(label.name, label.label);
-                });
-            }
-        });
-        allLabels.forEach((displayLabel, fieldName) => {
-            if (this.isPhoneField(fieldName)) {
-                phoneLabels.push({ name: fieldName, label: displayLabel });
-            } else {
-                otherLabels.push({ name: fieldName, label: displayLabel });
-            }
-        });
-    }
 
-    // Render non-phone fields first
-    otherLabels.forEach(label => {
-        const th = document.createElement('th');
-        th.textContent = label.label;
+        // Render non-phone fields first
+        otherLabels.forEach(label => {
+            const th = document.createElement('th');
+            th.textContent = label.label;
 
-        // Add sort icon
-        const sortIcon = document.createElement('span');
-        sortIcon.style.marginLeft = '5px';
-        sortIcon.innerHTML = (this.sortField === label.name)
+            // Add sort icon
+            const sortIcon = document.createElement('span');
+            sortIcon.style.marginLeft = '5px';
+            sortIcon.innerHTML = (this.sortField === label.name)
+                ? (this.sortOrder === 'asc' ? '▲' : '▼')
+                : '⇅';
+            th.appendChild(sortIcon);
+
+            // Make the whole header clickable (except for phone fields)
+            th.style.cursor = 'pointer';
+            th.classList.add('sortable-header');
+            th.addEventListener('click', () => {
+                if (this.sortField === label.name) {
+                    this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.sortField = label.name;
+                    this.sortOrder = 'asc';
+                }
+                this.sortLeads();
+                this.displayLeads(this.currentLeads);
+            });
+
+            headerElement.appendChild(th);
+        });
+
+        // Add status column (sortable)
+        const statusTh = document.createElement('th');
+        statusTh.textContent = 'Status';
+
+        // Add sort icon for status
+        const statusSortIcon = document.createElement('span');
+        statusSortIcon.style.marginLeft = '5px';
+        statusSortIcon.innerHTML = (this.sortField === 'status')
             ? (this.sortOrder === 'asc' ? '▲' : '▼')
             : '⇅';
-        th.appendChild(sortIcon);
+        statusTh.appendChild(statusSortIcon);
 
-        // Make the whole header clickable (except for phone fields)
-        th.style.cursor = 'pointer';
-        th.classList.add('sortable-header');
-        th.addEventListener('click', () => {
-            if (this.sortField === label.name) {
+        // Make status header clickable for sorting
+        statusTh.style.cursor = 'pointer';
+        statusTh.classList.add('sortable-header');
+        statusTh.addEventListener('click', () => {
+            if (this.sortField === 'status') {
                 this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
             } else {
-                this.sortField = label.name;
+                this.sortField = 'status';
                 this.sortOrder = 'asc';
             }
             this.sortLeads();
             this.displayLeads(this.currentLeads);
         });
 
-        headerElement.appendChild(th);
-    });
+        headerElement.appendChild(statusTh);
 
-    // Add status column (sortable)
-    const statusTh = document.createElement('th');
-    statusTh.textContent = 'Status';
+        // Then render phone fields after status
+        phoneLabels.forEach(label => {
+            const th = document.createElement('th');
+            th.textContent = label.label;
+            th.style.cursor = 'default';
+            headerElement.appendChild(th);
+        });
+    }
 
-    // Add sort icon for status
-    const statusSortIcon = document.createElement('span');
-    statusSortIcon.style.marginLeft = '5px';
-    statusSortIcon.innerHTML = (this.sortField === 'status')
-        ? (this.sortOrder === 'asc' ? '▲' : '▼')
-        : '⇅';
-    statusTh.appendChild(statusSortIcon);
+    // Generate lead row HTML
+    generateLeadRow(lead) {
+        let rowHtml = '';
 
-    // Make status header clickable for sorting
-    statusTh.style.cursor = 'pointer';
-    statusTh.classList.add('sortable-header');
-    statusTh.addEventListener('click', () => {
-        if (this.sortField === 'status') {
-            this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
-        } else {
-            this.sortField = 'status';
-            this.sortOrder = 'asc';
-        }
-        this.sortLeads();
-        this.displayLeads(this.currentLeads);
-    });
-
-    headerElement.appendChild(statusTh);
-
-    // Then render phone fields after status
-    phoneLabels.forEach(label => {
-        const th = document.createElement('th');
-        th.textContent = label.label;
-        th.style.cursor = 'default';
-        headerElement.appendChild(th);
-    });
-}
-
-// Generate lead row HTML
-generateLeadRow(lead) {
-    let rowHtml = '';
-
-    // Helper to render a cell for a label
-    const renderCell = (labelName, value) => {
-        if (this.isPhoneField(labelName) && value && value !== '-') {
-            const formattedPhone = this.formatPhoneForCall(value);
-            const displayPhone = this.formatPhoneForDisplay(value);
-            return `<td>
+        // Helper to render a cell for a label
+        const renderCell = (labelName, value) => {
+            if (this.isPhoneField(labelName) && value && value !== '-') {
+                const formattedPhone = this.formatPhoneForCall(value);
+                const displayPhone = this.formatPhoneForDisplay(value);
+                return `<td>
                 <span class="phone-link big-phone-link" data-phone="${formattedPhone}" title="Click to call with MicroSip">
                     <span style="font-size:2rem; vertical-align:middle;">${displayPhone}</span>
                 </span>
             </td>`;
-        } else {
-            return `<td>${value}</td>`;
-        }
-    };
-
-    let phoneLabels = [], otherLabels = [];
-
-    if (this.selectedListId) {
-        const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);
-        if (selectedList && selectedList.labels && selectedList.labels.length > 0) {
-            phoneLabels = selectedList.labels.filter(label => this.isPhoneField(label.name));
-            otherLabels = selectedList.labels.filter(label => !this.isPhoneField(label.name));
-        }
-    } else {
-        // If no specific list is selected, show all possible labels from all lists
-        const allLabels = new Map();
-        this.allLeadLists.forEach(list => {
-            if (list.labels) {
-                list.labels.forEach(label => {
-                    allLabels.set(label.name, label.label);
-                });
-            }
-        });
-        allLabels.forEach((displayLabel, fieldName) => {
-            if (this.isPhoneField(fieldName)) {
-                phoneLabels.push({ name: fieldName, label: displayLabel });
             } else {
-                otherLabels.push({ name: fieldName, label: displayLabel });
+                return `<td>${value}</td>`;
             }
+        };
+
+        let phoneLabels = [], otherLabels = [];
+
+        if (this.selectedListId) {
+            const selectedList = this.allLeadLists.find(list => list._id === this.selectedListId);
+            if (selectedList && selectedList.labels && selectedList.labels.length > 0) {
+                phoneLabels = selectedList.labels.filter(label => this.isPhoneField(label.name));
+                otherLabels = selectedList.labels.filter(label => !this.isPhoneField(label.name));
+            }
+        } else {
+            // If no specific list is selected, show all possible labels from all lists
+            const allLabels = new Map();
+            this.allLeadLists.forEach(list => {
+                if (list.labels) {
+                    list.labels.forEach(label => {
+                        allLabels.set(label.name, label.label);
+                    });
+                }
+            });
+            allLabels.forEach((displayLabel, fieldName) => {
+                if (this.isPhoneField(fieldName)) {
+                    phoneLabels.push({ name: fieldName, label: displayLabel });
+                } else {
+                    otherLabels.push({ name: fieldName, label: displayLabel });
+                }
+            });
+        }
+
+        // Render non-phone fields first
+        otherLabels.forEach(label => {
+            const value = lead.customFields?.[label.name] || '-';
+            rowHtml += renderCell(label.name, value);
         });
-    }
 
-    // Render non-phone fields first
-    otherLabels.forEach(label => {
-        const value = lead.customFields?.[label.name] || '-';
-        rowHtml += renderCell(label.name, value);
-    });
+        // Add status dropdown column
+        const statusOptions = [
+            'new',
+            'No Answer',
+            'Voice Mail',
+            'Call Back Qualified',
+            'Call Back NOT Qualified',
+            'deposited',
+            'active',
+            'withdrawn',
+            'inactive'
+        ];
 
-    // Add status dropdown column
-    const statusOptions = [
-        'new',
-        'No Answer',
-        'Voice Mail',
-        'Call Back Qualified',
-        'Call Back NOT Qualified',
-        'deposited',
-        'active',
-        'withdrawn',
-        'inactive'
-    ];
-
-    let statusHtml = `
+        let statusHtml = `
         <div class="status-dropdown-wrapper" data-bs-toggle="tooltip" data-bs-placement="top" title="Click to change status">
             <select class="form-select form-select-sm lead-status-dropdown" 
                     data-lead-id="${lead._id}"
@@ -899,29 +903,29 @@ generateLeadRow(lead) {
                     aria-label="Change lead status"
                     onchange="window.leadsManager.updateLeadStatus('${lead._id}', this.value)">
                 ${statusOptions.map(option =>
-                    `<option value="${option}" ${lead.status === option ? 'selected' : ''}>${this.formatStatus(option)}</option>`
-                ).join('')}
+            `<option value="${option}" ${lead.status === option ? 'selected' : ''}>${this.formatStatus(option)}</option>`
+        ).join('')}
             </select>
         </div>
     `;
 
-    // Add ownership indicator if lead is owned
-    if (lead.assignedTo && lead.assignedTo.name) {
-        statusHtml += `<br><small class="text-muted ownership-indicator mt-1">
+        // Add ownership indicator if lead is owned
+        if (lead.assignedTo && lead.assignedTo.name) {
+            statusHtml += `<br><small class="text-muted ownership-indicator mt-1">
             <i class="fas fa-user"></i> Owned by ${lead.assignedTo.name}
         </small>`;
+        }
+
+        rowHtml += `<td>${statusHtml}</td>`;
+
+        // Then render phone fields after status
+        phoneLabels.forEach(label => {
+            const value = lead.customFields?.[label.name] || '-';
+            rowHtml += renderCell(label.name, value);
+        });
+
+        return rowHtml;
     }
-
-    rowHtml += `<td>${statusHtml}</td>`;
-
-    // Then render phone fields after status
-    phoneLabels.forEach(label => {
-        const value = lead.customFields?.[label.name] || '-';
-        rowHtml += renderCell(label.name, value);
-    });
-
-    return rowHtml;
-}
 
 
     // Filter leads by selected list (now triggers server fetch)
@@ -1127,6 +1131,8 @@ generateLeadRow(lead) {
         this.openLeadNotesModal(lead);
     }    // Open lead notes modal
     openLeadNotesModal(lead) {
+        // Always keep a global reference to the last opened lead for modal sync
+        window.lastOpenedLead = lead;
         // Reset all modal buttons to ensure proper state
         if (typeof resetModalButtons === 'function') {
             resetModalButtons();
@@ -1184,7 +1190,7 @@ generateLeadRow(lead) {
                         }
                     }
                 }
-            } catch (e) {}
+            } catch (e) { }
         }, 0);
 
         // Set lead ID and status
@@ -1194,9 +1200,54 @@ generateLeadRow(lead) {
         if (leadNoteStatus) {
             leadNoteStatus.value = lead.status || 'new';
         }
-        // Display previous notes if any
+        // Render notes as usual
         if (leadNotesContainer) {
             this.displayLeadNotes(lead, leadNotesContainer);
+        }
+
+        // Add "Expand Notes" modal button below the Previous Notes section
+        if (leadNotesContainer && !document.getElementById('open-notes-only-modal-btn')) {
+            // Match Customers: Insert the button after the Previous Notes section (leadNotesContainer)
+            const expandNotesBtn = document.createElement('button');
+            expandNotesBtn.type = 'button';
+            expandNotesBtn.className = 'btn btn-sm btn-outline-primary mt-2';
+            expandNotesBtn.id = 'open-notes-only-modal-btn';
+            expandNotesBtn.innerHTML = '<i class="bi bi-arrows-fullscreen me-1"></i> Expand Notes';
+            if (leadNotesContainer.nextSibling) {
+                leadNotesContainer.parentNode.insertBefore(expandNotesBtn, leadNotesContainer.nextSibling);
+            } else {
+                leadNotesContainer.parentNode.appendChild(expandNotesBtn);
+            }
+            expandNotesBtn.onclick = () => {
+                let notesOnlyModalEl = document.getElementById('notesOnlyModal');
+                if (!notesOnlyModalEl) {
+                    notesOnlyModalEl = document.createElement('div');
+                    notesOnlyModalEl.className = 'modal fade';
+                    notesOnlyModalEl.id = 'notesOnlyModal';
+                    notesOnlyModalEl.tabIndex = -1;
+                    notesOnlyModalEl.innerHTML = `
+                        <div class="modal-dialog modal-lg modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">All Notes</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body" style="max-height:70vh; overflow-y:auto;">
+                                    <div id="notes-only-modal-container"></div>
+                                </div>
+                            </div>
+                        </div>`;
+                    document.body.appendChild(notesOnlyModalEl);
+                }
+                // Always use the notes from the last opened lead object (kept in sync)
+                const notesOnlyContainer = document.getElementById('notes-only-modal-container');
+                if (notesOnlyContainer) {
+                    notesOnlyContainer.innerHTML = '';
+                    this.displayLeadNotes(window.lastOpenedLead, notesOnlyContainer);
+                }
+                const notesOnlyModal = bootstrap.Modal.getOrCreateInstance(notesOnlyModalEl);
+                notesOnlyModal.show();
+            };
         }
         // Handle button visibility based on lead ownership
         const currentUser = this.apiManager.getCurrentUser();
@@ -1421,10 +1472,24 @@ generateLeadRow(lead) {
                 this.displayLeadNotes(updatedLead, leadNotesContainer);
             }
 
+            // --- Update the in-memory lead object in currentLeads ---
+            const idx = this.currentLeads.findIndex(l => l._id === leadId);
+            if (idx !== -1) {
+                // Update the notes and status in the in-memory object
+                this.currentLeads[idx].notes = updatedLead.notes;
+                this.currentLeads[idx].status = updatedLead.status;
+            }
+            // If the lead object passed to openLeadNotesModal is different, update its notes too
+            // (This covers the case where a reference to a lead object is held elsewhere)
+            // Try to update the lead object in the modal if possible
+            if (window.lastOpenedLead && window.lastOpenedLead._id === leadId) {
+                window.lastOpenedLead.notes = updatedLead.notes;
+                window.lastOpenedLead.status = updatedLead.status;
+            }
+
             // Clear the textarea after saving
             const noteContentInput = document.getElementById('lead-note-content');
             if (noteContentInput) noteContentInput.value = '';
-
 
             // Show generic saved message
             this.showSavedToast();
@@ -2104,27 +2169,27 @@ generateLeadRow(lead) {
             }
 
 
-        // Add row click handler (robust: do not open modal if clicking phone link or its children)
-        const rowClickHandler = (e) => {
-            // Prevent modal if clicking on phone link or any of its children
-            if (
-                e.target.closest('.phone-link') ||
-                e.target.closest('.big-phone-link') ||
-                e.target.closest('button') ||
-                e.target.closest('select') ||
-                e.target.closest('.dropdown')
-            ) {
-                return;
-            }
-            this.openEditLeadModal(lead);
-        };
-        row.addEventListener('click', rowClickHandler);
+            // Add row click handler (robust: do not open modal if clicking phone link or its children)
+            const rowClickHandler = (e) => {
+                // Prevent modal if clicking on phone link or any of its children
+                if (
+                    e.target.closest('.phone-link') ||
+                    e.target.closest('.big-phone-link') ||
+                    e.target.closest('button') ||
+                    e.target.closest('select') ||
+                    e.target.closest('.dropdown')
+                ) {
+                    return;
+                }
+                this.openEditLeadModal(lead);
+            };
+            row.addEventListener('click', rowClickHandler);
 
-        this.eventListeners.push({
-            element: row,
-            event: 'click',
-            handler: rowClickHandler
-        });
+            this.eventListeners.push({
+                element: row,
+                event: 'click',
+                handler: rowClickHandler
+            });
 
             tableBody.appendChild(row);
         });

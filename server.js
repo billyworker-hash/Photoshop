@@ -1478,7 +1478,7 @@ app.post('/api/customers/:id/move-to-depositors', authenticate, async (req, res)
                     createdBy: note.createdBy
                 })),
                 {
-                    content: 'Customer moved to depositors list - deposit confirmed.',
+                    content: 'Customer moved to depositors list.',
                     createdAt: new Date(),
                     createdBy: req.user.id
                 }
