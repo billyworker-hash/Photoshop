@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const path = require('path');
 
-const { User, Lead, LeadField, LeadList, Customer, Depositor, TimeEntry } = require('./models');
+const { User, Lead, LeadField, LeadList, Customer, Depositor } = require('./models');
 
 dotenv.config();
 const app = express();
@@ -238,9 +238,29 @@ app.get('/api/leads', authenticate, async (req, res) => {
             .skip(skip)
             .limit(limit);
 
-        // Log the fetch operation
-        console.log(`[LEADS API] User: ${req.user.username} | Page: ${page} | Limit: ${limit} | Total Available: ${totalCount} | Fetched: ${leads.length} leads | Filters:`, {
-            leadList: req.query.leadList || 'all_active',
+        // Get leadList name for logging (if specific list requested)
+        let leadListName = 'all_active';
+        if (req.query.leadList) {
+            try {
+                const leadListDoc = await LeadList.findById(req.query.leadList).select('name');
+                if (leadListDoc && leadListDoc.name) {
+                    leadListName = leadListDoc.name;
+                } else {
+                    leadListName = req.query.leadList; // fallback to ID if not found
+                }
+            } catch (e) {
+                leadListName = req.query.leadList; // fallback to ID if error
+            }
+        }
+        // Log the fetch operation with user name and leadList name
+        let username = 'unknown';
+        if (req.user && req.user.name) {
+            username = req.user.name;
+        } else if (req.user && req.user.email) {
+            username = req.user.email;
+        }
+        console.log(`[LEADS API] User: ${username} | Page: ${page} | Limit: ${limit} | Total Available: ${totalCount} | Fetched: ${leads.length} leads | Filters:`, {
+            leadList: leadListName,
             search: req.query.search || 'none',
             status: req.query.status || 'all',
             source: req.query.leadList ? 'upload_section' : 'leads_section'
@@ -1290,11 +1310,27 @@ app.post('/api/customers/:id/notes', authenticate, async (req, res) => {
             }
 
             // Add the note with current timestamp
-            customer.notes.push({
+            const newNote = {
                 content: note.content,
                 createdAt: new Date(),
                 createdBy: note.createdBy || req.user.id
-            });
+            };
+            customer.notes.push(newNote);
+
+            // --- SYNC NOTE TO ORIGINAL LEAD IF EXISTS ---
+            if (customer.originalLead) {
+                const lead = await Lead.findById(customer.originalLead);
+                if (lead) {
+                    if (!lead.notes) lead.notes = [];
+                    lead.notes.push({
+                        content: newNote.content,
+                        createdAt: newNote.createdAt,
+                        createdBy: newNote.createdBy
+                    });
+                    await lead.save();
+                }
+            }
+            // --- END SYNC ---
         }
         await customer.save();
 
@@ -1624,11 +1660,27 @@ app.post('/api/depositors/:id/notes', authenticate, async (req, res) => {
             }
 
             // Add the note with current timestamp
-            depositor.notes.push({
+            const newNote = {
                 content: note.content,
                 createdAt: new Date(),
                 createdBy: note.createdBy || req.user._id
-            });
+            };
+            depositor.notes.push(newNote);
+
+            // --- SYNC NOTE TO ORIGINAL LEAD IF EXISTS ---
+            if (depositor.originalLead) {
+                const lead = await Lead.findById(depositor.originalLead);
+                if (lead) {
+                    if (!lead.notes) lead.notes = [];
+                    lead.notes.push({
+                        content: newNote.content,
+                        createdAt: newNote.createdAt,
+                        createdBy: newNote.createdBy
+                    });
+                    await lead.save();
+                }
+            }
+            // --- END SYNC ---
         }
         await depositor.save();
 
@@ -2035,7 +2087,8 @@ app.get('/api/leads/counts', authenticate, async (req, res) => {
 
         console.log(`[DEBUG] Final result being sent:`, result);
 
-        console.log(`[LEADS COUNTS] User: ${req.user.username} | Retrieved counts for ${result.length} lists in single query`);
+        const logUserName = req.user?.name || req.user?.username || req.user?.email || req.user?.id || 'Unknown User';
+        console.log(`[LEADS COUNTS] User: ${logUserName} | Retrieved counts for ${result.length} lists in single query`);
 
         res.json(result);
     } catch (error) {
@@ -2046,7 +2099,30 @@ app.get('/api/leads/counts', authenticate, async (req, res) => {
 
 
 
-
+// Get all meetings for a specific lead (searches all users)
+app.get('/api/meetings/for-lead/:leadId', authenticate, async (req, res) => {
+    try {
+        const { leadId } = req.params;
+        // Find all users who have meetings linked to this lead
+        const users = await User.find({ "meetings.leadId": leadId }, { meetings: 1, name: 1 });
+        // Flatten and filter meetings for this lead
+        const meetings = [];
+        users.forEach(user => {
+            (user.meetings || []).forEach(meeting => {
+                if (meeting.leadId && meeting.leadId.toString() === leadId) {
+                    meetings.push({
+                        ...meeting.toObject ? meeting.toObject() : meeting,
+                        userName: user.name
+                    });
+                }
+            });
+        });
+        res.json(meetings);
+    } catch (error) {
+        console.error('Fetch meetings for lead error:', error);
+        res.status(500).json({ message: 'Failed to fetch meetings for lead' });
+    }
+});
 
 // Get all meetings for current user
 app.get('/api/meetings', authenticate, async (req, res) => {
@@ -2063,14 +2139,16 @@ app.get('/api/meetings', authenticate, async (req, res) => {
 // Add a meeting for current user
 app.post('/api/meetings', authenticate, async (req, res) => {
     try {
-        const { title, date, time, notes } = req.body;
+        const { title, date, time, notes, leadId, module } = req.body; // Add leadId and module
         if (!title || !date) return res.status(400).json({ message: 'Title and date are required' });
+
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
-        const meeting = { title, date, time, notes };
-        user.meetings.push(meeting);
+
+        user.meetings.push({ title, date, time, notes, leadId, module }); // Save leadId and module
         await user.save();
-        res.status(201).json(user.meetings[user.meetings.length - 1]);
+
+        res.status(201).json({ message: 'Meeting created' });
     } catch (error) {
         console.error('Add meeting error:', error);
         res.status(500).json({ message: 'Failed to add meeting' });

@@ -20,7 +20,7 @@ class UploadManager {
 
         // Pagination properties for lists
         this.listsCurrentPage = 1;
-        this.listsPerPage = 6; // 6 lists per page
+        this.listsPerPage = 8; // 8 lists per page
         this.listsTotalPages = 1;
         this.allLists = []; // Store all lists
     }
@@ -185,7 +185,7 @@ class UploadManager {
             <tr data-lead-id="${lead._id}">
                 ${customFieldsCells}
                 <td>
-                    <span class="badge status-${lead.status?.replace(/\s+/g, '-').toLowerCase()}">${lead.status}</span>
+                    <span>${lead.status}</span>
                 </td>
                 <td>
                     <button class="btn btn-sm btn-outline-danger" onclick="window.uploadManager.removeLead('${lead._id}')" title="Remove lead">
@@ -299,75 +299,79 @@ class UploadManager {
         if (!formContainer) return;
 
         let formHtml = `
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="alert alert-info">
-                        <h6><i class="bi bi-info-circle me-2"></i>Bulk Lead Entry Instructions:</h6>
-                        <ul class="mb-0">
-                            <li><strong>Paste multiple values:</strong> Enter one value per line in each field</li>
-                            <li><strong>Example:</strong> Paste "John Doe\\nJane Smith\\nBob Johnson" in Full Name</li>
-                            <li><strong>Matching:</strong> Each line will create a separate lead (line 1 with line 1, etc.)</li>
-                            <li><strong>Note:</strong> All fields are now custom labels - configure them when creating the list</li>
-                        </ul>
-                    </div>
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <h6><i class="bi bi-info-circle me-2"></i>Bulk Lead Entry Instructions:</h6>
+                    <ul class="mb-0">
+                        <li><strong>Paste multiple values:</strong> Enter one value per line in each field</li>
+                        <li><strong>Example:</strong> Paste "John Doe\\nJane Smith\\nBob Johnson" in Full Name</li>
+                        <li><strong>Matching:</strong> Each line will create a separate lead (line 1 with line 1, etc.)</li>
+                        <li><strong>Note:</strong> All fields are now custom labels - configure them when creating the list</li>
+                    </ul>
                 </div>
             </div>
-            <div class="row">
-        `;        // Add list-specific dynamic labels (Full Name and Email)
+        </div>
+        <div class="row">
+    `;
+
+        // Add list-specific dynamic labels (Full Name and Email)
         if (this.selectedList && this.selectedList.labels) {
             this.selectedList.labels.forEach(label => {
                 if (label.type === 'select') {
                     formHtml += `
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">${label.label}${label.required ? ' *' : ''}</label>
-                            <select class="form-select" name="${label.name}" ${label.required ? 'required' : ''}>
-                                <option value="">Select ${label.label}</option>
-                                ${label.options ? label.options.map(option => `<option value="${option}">${option}</option>`).join('') : ''}
-                            </select>
-                            <small class="text-muted">This will apply to all leads</small>
-                        </div>
-                    `;
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">${label.label}${label.required ? ' *' : ''}</label>
+                        <select class="form-select" name="${label.name}" ${label.required ? 'required' : ''}>
+                            <option value="">Select ${label.label}</option>
+                            ${label.options ? label.options.map(option => `<option value="${option}">${option}</option>`).join('') : ''}
+                        </select>
+                        <small class="text-muted">This will apply to all leads</small>
+                    </div>
+                `;
                 } else {
                     formHtml += `
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">${label.label}${label.required ? ' *' : ''}</label>
-                            <textarea class="form-control bulk-input" name="${label.name}" rows="8" 
-                                      placeholder="Enter one ${label.label.toLowerCase()} per line... ${label.required ? '(Required)' : '(Optional)'}"
-                                      ${label.required ? 'required' : ''}></textarea>
-                            <small class="text-muted">One ${label.label.toLowerCase()} per line</small>
-                        </div>
-                    `;
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">${label.label}${label.required ? ' *' : ''}</label>
+                        <textarea class="form-control bulk-input" name="${label.name}" rows="8" 
+                                  placeholder="Enter one ${label.label.toLowerCase()} per line... ${label.required ? '(Required)' : '(Optional)'}"
+                                  ${label.required ? 'required' : ''}></textarea>
+                        <small class="text-muted">One ${label.label.toLowerCase()} per line</small>
+                    </div>
+                `;
                 }
             });
-        }        // Add Status field as hardcoded default field
+        }
+
+        // Add Status field as hardcoded default field
         formHtml += `
-            <div class="col-md-6 mb-3">
-                <label class="form-label">Status *</label>
-                <select class="form-select" name="status" required>
-                    <option value="new">New</option>
-                    <option value="No Answer">No Answer</option>
-                    <option value="Voice Mail">Voice Mail</option>
-                    <option value="Call Back Qualified">Call Back Qualified</option>
-                    <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
-                    <option value="deposited">Deposited</option>
-                    <option value="active">Active</option>
-                    <option value="withdrawn">Withdrawn</option>
-                    <option value="inactive">Inactive</option>
-                </select>
-                <small class="text-muted">This will apply to all leads</small>
-            </div>
-        `;
+        <div class="col-md-4 mb-3">
+            <label class="form-label">Status *</label>
+            <select class="form-select" name="status" required>
+                <option value="new">New</option>
+                <option value="No Answer">No Answer</option>
+                <option value="Voice Mail">Voice Mail</option>
+                <option value="Call Back Qualified">Call Back Qualified</option>
+                <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
+                <option value="deposited">Deposited</option>
+                <option value="active">Active</option>
+                <option value="withdrawn">Withdrawn</option>
+                <option value="inactive">Inactive</option>
+            </select>
+            <small class="text-muted">This will apply to all leads</small>
+        </div>
+    `;
 
         formHtml += `
-            </div>
-            <div class="row mt-3">
-                <div class="col-12">
-                    <div class="alert alert-secondary">
-                        <small><strong>Preview:</strong> <span id="leads-preview">Enter values in any field to see how many leads will be created</span></small>
-                    </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="alert alert-secondary">
+                    <small><strong>Preview:</strong> <span id="leads-preview">Enter values in any field to see how many leads will be created</span></small>
                 </div>
             </div>
-        `;
+        </div>
+    `;
 
         formContainer.innerHTML = formHtml;
 
@@ -503,7 +507,7 @@ class UploadManager {
 
         const modalHtml = `
     <div class="modal fade" id="createListModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered" style="max-width: 420px;">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header py-2">
                     <h5 class="modal-title">Create New Lead List</h5>
@@ -565,7 +569,7 @@ class UploadManager {
 
         const modalHtml = `
         <div class="modal fade" id="bulkAddModal" tabindex="-1">
-            <div class="modal-dialog">
+            <div class="modal-dialog modal-xl"> <!-- Changed to modal-xl for wider modal -->
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">Bulk Add Leads to List</h5>
@@ -716,7 +720,7 @@ class UploadManager {
             this.addCustomLabelToCreateModal();
             const lastRow = container.lastElementChild;
             // Only set the name field, which is used for both name and label
-            const nameInput = lastRow.querySelector(`input[name="labels[${this.createLabelIndex-1}][name]"]`);
+            const nameInput = lastRow.querySelector(`input[name="labels[${this.createLabelIndex - 1}][name]"]`);
             if (nameInput) nameInput.value = defaultLabel.label;
         });
     }
@@ -1169,32 +1173,30 @@ class UploadManager {
         if (!leadsContainer) return;
 
         let headerHtml = '';
-
         // Add list-specific label columns if a list is selected
         if (this.selectedList && this.selectedList.labels && this.selectedList.labels.length > 0) {
             this.selectedList.labels.forEach(label => {
                 headerHtml += `<th>${label.label}</th>`;
             });
         }
-
         // Add status and actions columns
         headerHtml += `<th>Status</th><th>Actions</th>`;
 
-        // Find or create table header
-        let tableHeader = leadsContainer.querySelector('thead tr');
-        if (!tableHeader) {
-            // Create table structure if it doesn't exist
+        // Find or create the table
+        let table = leadsContainer.querySelector('table.upload-leads-table');
+        if (!table) {
             leadsContainer.innerHTML = `
-                <table class="table table-striped">
-                    <thead>
-                        <tr>${headerHtml}</tr>
-                    </thead>
-                    <tbody id="upload-leads-tbody">
-                    </tbody>
-                </table>
+                <div style="max-height:400px;overflow-y:auto;width:100%;">
+                    <table class="table table-striped mb-0 upload-leads-table">
+                        <thead><tr>${headerHtml}</tr></thead>
+                        <tbody id="upload-leads-tbody"></tbody>
+                    </table>
+                </div>
             `;
         } else {
-            tableHeader.innerHTML = headerHtml;
+            // Update thead only
+            const thead = table.querySelector('thead');
+            if (thead) thead.innerHTML = `<tr>${headerHtml}</tr>`;
         }
     }
 
@@ -1257,22 +1259,27 @@ class UploadManager {
 
         // Set up leads per page selectors if not already done
         [leadsPerPageSelect, leadsPerPageSelectTop].forEach(select => {
-            if (select && !select.dataset.listenerAdded) {
+            if (select) {
+                // Always sync selector value to current leadsPerPage
                 select.value = this.leadsPerPage.toString();
-                select.addEventListener('change', async (e) => {
-                    this.leadsPerPage = parseInt(e.target.value);
-                    this.currentPage = 1; // Reset to first page
-
-                    // Sync both selectors
-                    [leadsPerPageSelect, leadsPerPageSelectTop].forEach(s => {
-                        if (s && s !== e.target) {
-                            s.value = e.target.value;
+                if (!select.dataset.listenerAdded) {
+                    select.addEventListener('change', async (e) => {
+                        const newValue = parseInt(e.target.value);
+                        if (this.leadsPerPage !== newValue) {
+                            this.leadsPerPage = newValue;
+                            this.currentPage = 1; // Reset to first page
+                            // Sync both selectors
+                            [leadsPerPageSelect, leadsPerPageSelectTop].forEach(s => {
+                                if (s && s !== e.target) {
+                                    s.value = e.target.value;
+                                }
+                            });
+                            // Always refresh leads after changing per page
+                            await this.applyFiltersAndDisplay();
                         }
                     });
-
-                    await this.refreshCurrentView();
-                });
-                select.dataset.listenerAdded = 'true';
+                    select.dataset.listenerAdded = 'true';
+                }
             }
         });
 
@@ -1657,9 +1664,10 @@ class UploadManager {
                 </div>
             ` : '';
 
+
             return `
-            <div class="col-md-6 mb-3">
-                <div class="card h-100 cursor-pointer ${this.selectedListId === list._id ? 'border-primary bg-light' : ''}" 
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3 mb-3">
+                <div class="card h-100 cursor-pointer ${this.selectedListId === list._id ? 'border-primary bg-light' : ''}"
                      onclick="window.uploadManager.selectList('${list._id}')">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-start mb-2">
@@ -1685,6 +1693,12 @@ class UploadManager {
         `}).join('');
 
         container.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Lead Lists</h5>
+                <button class="btn btn-primary btn-sm" onclick="window.uploadManager.showCreateListModal()">
+                    <i class="bi bi-plus-lg me-1"></i> Create New List
+                </button>
+            </div>
             <div class="row">
                 ${listsHtml}
             </div>
@@ -1765,7 +1779,7 @@ class UploadManager {
         const selectedAgentIds = (this.selectedList.visibleToSpecificAgents || []).map(a => typeof a === 'string' ? a : a._id);
         let modalHtml = `
             <div class="modal fade" id="editListModal" tabindex="-1">
-                <div class="modal-dialog">
+                <div class="modal-dialog modal-lg">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title">Edit Lead List</h5>
@@ -1843,36 +1857,27 @@ class UploadManager {
         modal.show();
     }
 
-    // Keep this version!
     handleEditList(e) {
         const form = e.target;
         const formData = new FormData(form);
         this.selectedList.name = formData.get('name').trim();
         this.selectedList.description = formData.get('description').trim();
         this.selectedList.isVisibleToUsers = formData.get('isVisibleToUsers') === 'on';
+
         let visibleToSpecificAgents = [];
         if (!this.selectedList.isVisibleToUsers) {
             const agentCheckboxes = form.querySelectorAll('input[name="editSpecificAgents"]:checked');
             visibleToSpecificAgents = Array.from(agentCheckboxes).map(cb => cb.value);
         }
         this.selectedList.visibleToSpecificAgents = visibleToSpecificAgents;
-        // Labels
+
         const labels = [];
-        let idx = 0;
-        while (formData.has(`label_name_${idx}`)) {
-            const name = formData.get(`label_name_${idx}`).trim();
-            const label = formData.get(`label_label_${idx}`).trim();
-            const type = formData.get(`label_type_${idx}`);
-            const required = formData.get(`label_required_${idx}`) === 'on';
-            let options = [];
-            if (type === 'select') {
-                options = (formData.get(`label_options_${idx}`) || '').split(',').map(opt => opt.trim()).filter(opt => opt);
-            }
-            if (name && label) {
-                labels.push({ name, label, type, required, options });
-            }
-            idx++;
-        }
+        const container = document.getElementById('edit-custom-labels-container');
+        const labelRows = container?.querySelectorAll('.row.g-2.align-items-center') || [];
+        labelRows.forEach(row => {
+            const name = row.querySelector('input[name^="label_name_"]')?.value.trim();
+            if (name) labels.push({ name, label: name });
+        });
         this.selectedList.labels = labels;
         this.apiManager.put(`/lead-lists/${this.selectedList._id}`, this.selectedList)
             .then(() => {
@@ -1890,56 +1895,28 @@ class UploadManager {
         if (!container) return;
         container.innerHTML = '';
         (this.selectedList.labels || []).forEach((label, idx) => {
-            const labelDiv = document.createElement('div');
-            labelDiv.className = 'mb-2 border rounded p-2 position-relative';
-            labelDiv.innerHTML = `
-                <div class="row g-2 align-items-center">
-                    <div class="col-md-4">
-                        <input type="text" class="form-control" name="label_name_${idx}" value="${label.name}" placeholder="Field Name" required>
-                    </div>
-                    <div class="col-md-4">
-                        <input type="text" class="form-control" name="label_label_${idx}" value="${label.label}" placeholder="Display Label" required>
-                    </div>
-                    <div class="col-md-2">
-                        <select class="form-select" name="label_type_${idx}">
-                            <option value="text" ${label.type === 'text' ? 'selected' : ''}>Text</option>
-                            <option value="number" ${label.type === 'number' ? 'selected' : ''}>Number</option>
-                            <option value="email" ${label.type === 'email' ? 'selected' : ''}>Email</option>
-                            <option value="phone" ${label.type === 'phone' ? 'selected' : ''}>Phone</option>
-                            <option value="select" ${label.type === 'select' ? 'selected' : ''}>Dropdown</option>
-                            <option value="textarea" ${label.type === 'textarea' ? 'selected' : ''}>Text Area</option>
-                        </select>
-                    </div>
-                    <div class="col-md-1">
-                        <input type="checkbox" class="form-check-input" name="label_required_${idx}" ${label.required ? 'checked' : ''} title="Required">
-                    </div>
-                    <div class="col-md-1">
-                        <button type="button" class="btn btn-sm btn-danger remove-label-btn" data-label-idx="${idx}"><i class="bi bi-x"></i></button>
-                    </div>
-                </div>
-                <div class="row mt-2" style="display:${label.type === 'select' ? 'block' : 'none'}" id="label-options-row-${idx}">
-                    <div class="col-12">
-                        <input type="text" class="form-control" name="label_options_${idx}" value="${(label.options || []).join(', ')}" placeholder="Comma-separated options for dropdown">
-                    </div>
-                </div>
-            `;
-            container.appendChild(labelDiv);
-        });
-        container.querySelectorAll('.remove-label-btn').forEach(btn => {
-            btn.onclick = (e) => {
-                const idx = parseInt(btn.dataset.labelIdx);
-                this.selectedList.labels.splice(idx, 1);
-                this.renderEditCustomLabels();
-            };
-        });
-        container.querySelectorAll('select[name^="label_type_"]').forEach((select, idx) => {
-            select.onchange = (e) => {
-                const row = document.getElementById(`label-options-row-${idx}`);
-                if (row) row.style.display = select.value === 'select' ? 'block' : 'none';
-            };
-        });
-    }
-
+          const labelDiv = document.createElement('div');
+          labelDiv.className = 'mb-2 border rounded p-2 position-relative';
+          labelDiv.innerHTML = `
+              <div class="row g-2 align-items-center">
+                  <div class="col-10">
+                      <input type="text" class="form-control" name="label_name_${idx}" value="${label.name || ''}" placeholder="Field Name" required>
+                  </div>
+                  <div class="col-2">
+                      <button type="button" class="btn btn-sm btn-danger remove-label-btn" data-label-idx="${idx}"><i class="bi bi-x"></i></button>
+                  </div>
+              </div>
+          `;
+          container.appendChild(labelDiv);
+      });
+      container.querySelectorAll('.remove-label-btn').forEach(btn => {
+          btn.onclick = (e) => {
+              const idx = parseInt(btn.dataset.labelIdx);
+              this.selectedList.labels.splice(idx, 1);
+              this.renderEditCustomLabels();
+          };
+      });
+  }
     addEditCustomLabel() {
         // Sync current UI values to this.selectedList.labels before adding new
         const container = document.getElementById('edit-custom-labels-container');
@@ -1948,25 +1925,16 @@ class UploadManager {
             const rows = container.querySelectorAll('.row.g-2.align-items-center');
             rows.forEach((row, idx) => {
                 const name = row.querySelector(`input[name="label_name_${idx}"]`)?.value.trim() || '';
-                const label = row.querySelector(`input[name="label_label_${idx}"]`)?.value.trim() || '';
-                const type = row.querySelector(`select[name="label_type_${idx}"]`)?.value || 'text';
-                const required = row.querySelector(`input[name="label_required_${idx}"]`)?.checked || false;
-                let options = [];
-                if (type === 'select') {
-                    const optionsInput = container.querySelector(`input[name="label_options_${idx}"]`);
-                    options = optionsInput ? optionsInput.value.split(',').map(opt => opt.trim()).filter(opt => opt) : [];
-                }
-                if (name && label) {
-                    updatedLabels.push({ name, label, type, required, options });
-                } else if (name || label) {
-                    // If user started typing but didn't finish, still keep the row
-                    updatedLabels.push({ name, label, type, required, options });
+                if (name) {
+                    updatedLabels.push({ name, label: name}); // Set label to be the same as name
+                } else if (name) {
+                    updatedLabels.push({ name, label: name});
                 }
             });
             this.selectedList.labels = updatedLabels;
         }
         // Now add the new blank label
-        this.selectedList.labels.push({ name: '', label: '', type: 'text', required: false, options: [] });
+        this.selectedList.labels.push({ name: '' });
         this.renderEditCustomLabels();
     }
 }

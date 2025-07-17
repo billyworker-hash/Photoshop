@@ -3,6 +3,10 @@
 
 document.addEventListener('DOMContentLoaded', async function () {
 
+    // Request desktop notification permission on app load
+    if ('Notification' in window && Notification.permission !== 'granted') {
+        Notification.requestPermission();
+    }
 
     function showInactivityLogoutModal() {
         const modalEl = document.getElementById('inactivityLogoutModal');
@@ -126,6 +130,10 @@ async function initializeManagers() {
     if (!window.calendarManager) {
         window.calendarManager = new CalendarManager(window.apiManager);
     }
+    // Start global meeting notifications (works on all pages)
+    if (window.calendarManager && typeof window.calendarManager.startAppointmentNotifications === 'function') {
+        window.calendarManager.startAppointmentNotifications();
+    }
 
     // Initialize upload manager (async)
     await window.uploadManager.init();
@@ -238,6 +246,12 @@ async function showPage(pageName) {
         window.dashboard.destroyCharts();
     }
 
+    // --- Save Leads page state if leaving leads ---
+    const currentVisiblePage = document.querySelector('.page-content:not([style*="display: none"])');
+    if (currentVisiblePage && currentVisiblePage.id === 'leads-page' && window.leadsManager) {
+        window.leadsManager.saveLeadsPageState();
+    }
+
     // Stop auto-refresh for all managers when switching pages
     if (window.leadsManager) {
         window.leadsManager.setPageActive(false);
@@ -268,10 +282,13 @@ async function showPage(pageName) {
             break;
         case 'leads':
             if (window.leadsManager) {
-                window.leadsManager.setPageActive(true);
-                window.leadsManager.loadLeads();
+                await window.leadsManager.setPageActive(true);
+                await window.leadsManager.loadLeadLists(); // <-- Ensure lists are loaded first
+                await window.leadsManager.restoreLeadsPageState();
+                await window.leadsManager.loadLeads();
             }
-            break; case 'customers':
+            break;
+        case 'customers':
             // Only allow agents to access customers page
             if (currentUser && currentUser.role === 'agent' && window.customerManager) {
                 window.customerManager.loadCustomers();
@@ -616,22 +633,10 @@ function updateUserInterface(currentUser) {
 
         dashboardGreeting.textContent = `${greeting}, ${currentUser.name}!`;
     }
-
-    // Update current time
-    updateCurrentTime();
-
-    // Set up time update interval
-    setInterval(updateCurrentTime, 1000);
+    // Removed current time update logic
 }
 
-// Update current time display
-function updateCurrentTime() {
-    const timeElement = document.getElementById('current-time');
-    if (timeElement) {
-        const now = new Date();
-        timeElement.textContent = now.toLocaleString();
-    }
-}
+// Removed updateCurrentTime function
 
 // Reset all modal buttons to default state before opening
 function resetModalButtons() {

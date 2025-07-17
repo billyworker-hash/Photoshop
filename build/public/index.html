@@ -25,548 +25,556 @@
     </div>
 
     <!-- Main App Content (hidden initially) -->
-    <div id="app-content" class="container-fluid d-none">
-        <div class="row"><!-- Sidebar -->
-            <div class="col-md-2 bg-dark text-white sidebar min-vh-100 py-3">
-                <h4 class="text-center">CRM System</h4>
-                <hr>
+    <div id="app-content" class="app-shell d-flex d-none">
+        <div class="sidebar d-flex flex-column bg-dark text-white py-3">
+            <h4 class="text-center">CRM System</h4>
+            <hr>
 
-                <!-- User Info -->
-                <div class="text-center mb-3" id="user-info-sidebar">
-                    <div class="text-muted small">Welcome</div>
-                    <div class="fw-bold" id="user-name-sidebar">Loading...</div>
-                    <div class="text-muted small" id="user-role-sidebar">-</div>
-                </div>
-                <hr>
-
-                <div class="nav flex-column">
-                    <a href="#" class="nav-link active" data-page="dashboard">
-                        <i class="bi bi-speedometer2 me-2"></i> Dashboard </a> <a href="#" class="nav-link"
-                        data-page="leads">
-                        <i class="bi bi-person me-2"></i> Leads </a> <a href="#" class="nav-link" id="customers-tab"
-                        data-page="customers">
-                        <i class="bi bi-people-fill me-2"></i> Customers
-                    </a>
-                    <a href="#" class="nav-link" id="depositors-tab" data-page="depositors">
-                        <i class="bi bi-bank me-2"></i> Depositors
-                    </a>
-                    <a href="#" class="nav-link" id="calendar-tab" data-page="calendar">
-                        <i class="bi bi-calendar"></i> Calendar
-                    </a>
-                    <div id="admin-menu" style="display: none;">
-                        <a href="#" class="nav-link" data-page="upload">
-                            <i class="bi bi-upload me-2"></i> Manage Leads
-                        </a> <a href="#" class="nav-link" data-page="users">
-                            <i class="bi bi-people me-2"></i> Agents / Admins
-                        </a>
-                    </div>
-                    <hr>
-                    <a href="#" id="logout-btn" class="nav-link text-danger">
-                        <i class="bi bi-box-arrow-right me-2"></i> Logout
-                    </a>
-                </div>
+            <!-- User Info -->
+            <div class="text-center mb-3" id="user-info-sidebar">
+                <div class="text-muted small">Welcome</div>
+                <div class="fw-bold" id="user-name-sidebar">Loading...</div>
+                <div class="text-muted small" id="user-role-sidebar">-</div>
             </div>
-            <!-- Main Content -->
-            <div class="col main-content"> <!-- Dashboard Page -->
-                <div id="dashboard-page" class="page-content container-fluid mt-4" style="display: none;">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <div>
-                            <h2 class="mb-1">Dashboard</h2>
-                            <p class="text-muted mb-0" id="dashboard-greeting">Welcome back!</p>
-                        </div>
-                        <div class="text-end">
-                            <div class="text-muted small">Current Time</div>
-                            <div id="current-time" class="fw-bold">-</div>
+            <hr>
+
+            <div class="nav flex-column">
+                <a href="#" class="nav-link active" data-page="dashboard">
+                    <i class="bi bi-speedometer2 me-2"></i> Dashboard </a> <a href="#" class="nav-link"
+                    data-page="leads">
+                    <i class="bi bi-person me-2"></i> Leads </a> <a href="#" class="nav-link" id="customers-tab"
+                    data-page="customers">
+                    <i class="bi bi-people-fill me-2"></i> Customers
+                </a>
+                <a href="#" class="nav-link" id="depositors-tab" data-page="depositors">
+                    <i class="bi bi-bank me-2"></i> Depositors
+                </a>
+                <a href="#" class="nav-link" id="calendar-tab" data-page="calendar">
+                    <i class="bi bi-calendar"></i> Calendar
+                </a>
+                <div id="admin-menu" style="display: none;">
+                    <a href="#" class="nav-link" data-page="upload">
+                        <i class="bi bi-upload me-2"></i> Manage Leads
+                    </a> <a href="#" class="nav-link" data-page="users">
+                        <i class="bi bi-people me-2"></i> Agents / Admins
+                    </a>
+                </div>
+                <hr>
+                <a href="#" id="logout-btn" class="nav-link text-danger">
+                    <i class="bi bi-box-arrow-right me-2"></i> Logout
+                </a>
+            </div>
+        </div>
+        <!-- Main Content -->
+        <div class="main-content flex-grow-1"> <!-- Dashboard Page -->
+            <div id="dashboard-page" class="page-content container-fluid mt-4" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h2 class="mb-1">Dashboard</h2>
+                        <p class="text-muted mb-0" id="dashboard-greeting">Welcome back!</p>
+                    </div>
+                    <!-- Current Time removed -->
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-4">
+                        <div class="card text-white bg-primary h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between">
+                                    <h5 class="card-title">Total Leads</h5>
+                                    <i class="bi bi-people-fill fs-4"></i>
+                                </div>
+                                <h2 class="card-text mt-2" id="total-leads">0</h2>
+                                <span class="text-white-50 mt-auto" id="total-leads-trend">0% from last month</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-4 mb-4">
-                            <div class="card text-white bg-primary h-100">
-                                <div class="card-body d-flex flex-column">
-                                    <div class="d-flex justify-content-between">
-                                        <h5 class="card-title">Total Leads</h5>
-                                        <i class="bi bi-people-fill fs-4"></i>
+                    <div class="col-md-4 mb-4">
+                        <div class="card text-white bg-success h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between">
+                                    <h5 class="card-title">Converted Leads</h5>
+                                    <i class="bi bi-check-circle-fill fs-4"></i>
+                                </div>
+                                <h2 class="card-text mt-2" id="converted-leads">0</h2>
+                                <div class="progress bg-white bg-opacity-25 mt-2">
+                                    <div id="conversion-rate-bar" class="progress-bar bg-white" role="progressbar"
+                                        style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                                     </div>
-                                    <h2 class="card-text mt-2" id="total-leads">0</h2>
-                                    <span class="text-white-50 mt-auto" id="total-leads-trend">0% from last month</span>
+                                </div>
+                                <span class="text-white-50 mt-2" id="conversion-rate">0% conversion rate</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-4">
+                        <div class="card text-white bg-warning h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between">
+                                    <h5 class="card-title">Pending Leads</h5>
+                                    <i class="bi bi-hourglass-split fs-4"></i>
+                                </div>
+                                <h2 class="card-text mt-2" id="pending-leads">0</h2>
+                                <span class="text-white-50 mt-auto" id="pending-breakdown">New: 0 | Contacted: 0 |
+                                    Docs: 0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-12 mb-4">
+                        <div class="card shadow h-100">
+                            <div class="card-header bg-white">
+                                <h5 class="card-title mb-0">Lead Acquisition Trends</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container" style="position: relative; height: 300px;">
+                                    <canvas id="lead-trends-chart"></canvas>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-4 mb-4">
-                            <div class="card text-white bg-success h-100">
-                                <div class="card-body d-flex flex-column">
-                                    <div class="d-flex justify-content-between">
-                                        <h5 class="card-title">Converted Leads</h5>
-                                        <i class="bi bi-check-circle-fill fs-4"></i>
-                                    </div>
-                                    <h2 class="card-text mt-2" id="converted-leads">0</h2>
-                                    <div class="progress bg-white bg-opacity-25 mt-2">
-                                        <div id="conversion-rate-bar" class="progress-bar bg-white" role="progressbar"
-                                            style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    </div>
+                </div>
+            </div><!-- Leads Page -->
+            <div id="leads-page" class="page-content container-fluid mt-4" style="display: none;">
+
+                <!-- Add this block for the Leads title at the top of the Leads section -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 class="mb-0">Leads</h2>
+                </div>
+
+                <!-- Lead Lists Cards Section -->
+                <div class="mb-4">
+                    <div id="lead-lists-cards" class="lead-lists-cards">
+                        <!-- Lead list cards will be populated here -->
+                    </div>
+                    <div id="lead-lists-pagination" class="d-flex justify-content-center mt-2">
+                        <!-- Lead lists pagination will be added here -->
+                    </div>
+                </div>
+
+                <div class="card shadow mb-4">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 mb-3 mb-md-0">
+                                <input type="text" class="form-control" id="lead-search"
+                                    placeholder="Search by name, email...">
+                            </div>
+                            <div class="col-md-3 mb-3 mb-md-0">
+                                <select class="form-select" id="lead-list-filter">
+                                    <option value="">Select a List</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3 mb-md-0"> <select class="form-select" id="lead-status-filter">
+                                    <option value="">All Statuses</option>
+                                    <option value="new">New</option>
+                                    <option value="No Answer">No Answer</option>
+                                    <option value="Voice Mail">Voice Mail</option>
+                                    <option value="Call Back Qualified">Call Back Qualified</option>
+                                    <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
+                                    <option value="deposited">Deposited</option>
+                                    <option value="active">Active</option>
+                                    <option value="withdrawn">Withdrawn</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-outline-secondary w-100" id="reset-filters-btn">
+                                    <i class="bi bi-x-circle me-1"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Pagination Controls -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center">
+                        <label for="leads-per-page-top" class="form-label me-2 mb-0">Show:</label>
+                        <select class="form-select form-select-sm" id="leads-per-page-top" style="width: auto;">
+                            <option value="10" selected>10 leads</option>
+                            <option value="50">50 leads</option>
+                            <option value="100">100 leads</option>
+                        </select>
+                        <span class="ms-3 text-muted" id="pagination-info-top">-</span>
+                    </div>
+                    <div id="leads-pagination-top" class="d-flex justify-content-center">
+                        <!-- Top pagination will be added here -->
+                    </div>
+                </div>
+
+                <div class="card shadow">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr id="leads-table-header">
+                                        <!-- Table headers will be populated dynamically -->
+                                    </tr>
+                                </thead>
+                                <tbody id="leads-table-body">
+                                    <!-- Lead rows will be populated here -->
+                                </tbody>
+                            </table>
+                            <div id="no-leads-message" class="text-center p-4" style="display: none;">
+                                <p class="text-muted">No leads found matching your filters</p>
+                            </div>
+
+                            <!-- Pagination Controls -->
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div class="d-flex align-items-center">
+                                    <label for="leads-per-page" class="form-label me-2 mb-0">Show:</label> <select
+                                        class="form-select form-select-sm" id="leads-per-page" style="width: auto;">
+                                        <option value="10" selected>10 leads</option>
+                                        <option value="50">50 leads</option>
+                                        <option value="100">100 leads</option>
+                                    </select>
+                                    <span class="ms-3 text-muted" id="pagination-info">-</span>
+                                </div>
+                                <div id="leads-pagination" class="d-flex justify-content-center">
+                                    <!-- Pagination will be added here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- Upload Leads Page -->
+            <div id="upload-page" class="page-content container-fluid mt-4" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>Lead List Management</h2>
+                </div>
+
+                <!-- Status Messages -->
+                <div id="list-success" class="mb-3" style="display: none;">
+                    <!-- Success message will be inserted here -->
+                </div>
+
+                <div id="list-error" class="mb-3" style="display: none;">
+                    <!-- Error message will be inserted here -->
+                </div>
+                <!-- Lead Lists Section -->
+                <div class="row">
+                    <div class="col-12 mb-4">
+                        <div class="card shadow">
+                            <div class="card-header">
+                                <h5 class="mb-0">Lead Lists</h5>
+                            </div>
+                            <div class="card-body"> <!-- Search Lists -->
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <div class="input-group">
+                                            <span class="input-group-text">
+                                                <i class="bi bi-search"></i>
+                                            </span>
+                                            <input type="text" class="form-control" id="list-search"
+                                                placeholder="Search lists by name or description...">
+                                            <button class="btn btn-outline-secondary" type="button"
+                                                id="clear-list-search" title="Clear search">
+                                                <i class="bi bi-x-circle"></i>
+                                            </button>
                                         </div>
                                     </div>
-                                    <span class="text-white-50 mt-2" id="conversion-rate">0% conversion rate</span>
                                 </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 mb-4">
-                            <div class="card text-white bg-warning h-100">
-                                <div class="card-body d-flex flex-column">
-                                    <div class="d-flex justify-content-between">
-                                        <h5 class="card-title">Pending Leads</h5>
-                                        <i class="bi bi-hourglass-split fs-4"></i>
+                                <div id="lead-lists-container">
+                                    <div class="text-center text-muted">
+                                        <i class="bi bi-list-ul fs-1"></i>
+                                        <p>Loading lists...</p>
                                     </div>
-                                    <h2 class="card-text mt-2" id="pending-leads">0</h2>
-                                    <span class="text-white-50 mt-auto" id="pending-breakdown">New: 0 | Contacted: 0 |
-                                        Docs: 0</span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="row mt-2">
-                        <div class="col-md-12 mb-4">
-                            <div class="card shadow h-100">
-                                <div class="card-header bg-white">
-                                    <h5 class="card-title mb-0">Lead Acquisition Trends</h5>
+
+                    <div class="col-12">
+                        <div id="selected-list-panel" style="display: none;">
+                            <div class="card shadow">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0" id="selected-list-title">Selected List</h5>
+                                    <div>
+                                        <button class="btn btn-sm btn-outline-primary me-2"
+                                            onclick="window.uploadManager.showBulkAddModal()">
+                                            <i class="bi bi-plus-lg me-1"></i> Add Leads
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary me-2"
+                                            onclick="window.uploadManager.showEditListModal()">
+                                            <i class="bi bi-pencil me-1"></i> Edit List
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger"
+                                            onclick="window.uploadManager.deleteSelectedList()">
+                                            <i class="bi bi-trash me-1"></i> Delete List
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="card-body">
-                                    <div class="chart-container" style="position: relative; height: 300px;">
-                                        <canvas id="lead-trends-chart"></canvas>
+                                    <div id="selected-list-info" class="mb-3">
+                                        <!-- List info will be displayed here -->
                                     </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div><!-- Leads Page -->
-                <div id="leads-page" class="page-content container-fluid mt-4" style="display: none;">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>Leads</h2>
-                    </div>
-                    <!-- Lead Lists Cards Section -->
-                    <div class="mb-4">
-                        <h4>Lead Lists</h4>
-                        <div id="lead-lists-cards" class="lead-lists-cards">
-                            <!-- Lead list cards will be populated here -->
-                        </div>
-                    </div>
 
-                    <div class="card shadow mb-4">
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-3 mb-3 mb-md-0">
-                                    <input type="text" class="form-control" id="lead-search"
-                                        placeholder="Search by name, email...">
-                                </div>
-                                <div class="col-md-3 mb-3 mb-md-0">
-                                    <select class="form-select" id="lead-list-filter">
-                                        <option value="">Select a List</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3 mb-3 mb-md-0"> <select class="form-select" id="lead-status-filter">
-                                        <option value="">All Statuses</option>
-                                        <option value="new">New</option>
-                                        <option value="No Answer">No Answer</option>
-                                        <option value="Voice Mail">Voice Mail</option>
-                                        <option value="Call Back Qualified">Call Back Qualified</option>
-                                        <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
-                                        <option value="deposited">Deposited</option>
-                                        <option value="active">Active</option>
-                                        <option value="withdrawn">Withdrawn</option>
-                                        <option value="inactive">Inactive</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <button class="btn btn-outline-secondary w-100" id="reset-filters-btn">
-                                        <i class="bi bi-x-circle me-1"></i> Reset
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Top Pagination Controls -->
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <div class="d-flex align-items-center">
-                            <label for="leads-per-page-top" class="form-label me-2 mb-0">Show:</label>
-                            <select class="form-select form-select-sm" id="leads-per-page-top" style="width: auto;">
-                                <option value="10" selected>10 leads</option>
-                                <option value="50">50 leads</option>
-                                <option value="100">100 leads</option>
-                            </select>
-                            <span class="ms-3 text-muted" id="pagination-info-top">-</span>
-                        </div>
-                        <div id="leads-pagination-top" class="d-flex justify-content-center">
-                            <!-- Top pagination will be added here -->
-                        </div>
-                    </div>
-
-                    <div class="card shadow">
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead>
-                                        <tr id="leads-table-header">
-                                            <!-- Table headers will be populated dynamically -->
-                                        </tr>
-                                    </thead>
-                                    <tbody id="leads-table-body">
-                                        <!-- Lead rows will be populated here -->
-                                    </tbody>
-                                </table>
-                                <div id="no-leads-message" class="text-center p-4" style="display: none;">
-                                    <p class="text-muted">No leads found matching your filters</p>
-                                </div>
-
-                                <!-- Pagination Controls -->
-                                <div class="d-flex justify-content-between align-items-center mt-3">
-                                    <div class="d-flex align-items-center">
-                                        <label for="leads-per-page" class="form-label me-2 mb-0">Show:</label> <select
-                                            class="form-select form-select-sm" id="leads-per-page" style="width: auto;">
-                                            <option value="10" selected>10 leads</option>
-                                            <option value="50">50 leads</option>
-                                            <option value="100">100 leads</option>
-                                        </select>
-                                        <span class="ms-3 text-muted" id="pagination-info">-</span>
-                                    </div>
-                                    <div id="leads-pagination" class="d-flex justify-content-center">
-                                        <!-- Pagination will be added here -->
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div> <!-- Upload Leads Page -->
-                <div id="upload-page" class="page-content container-fluid mt-4" style="display: none;">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>Lead List Management</h2>
-                        <button class="btn btn-primary" onclick="window.uploadManager.showCreateListModal()">
-                            <i class="bi bi-plus-circle me-1"></i> Create New List
-                        </button>
-                    </div>
-
-                    <!-- Status Messages -->
-                    <div id="list-success" class="mb-3" style="display: none;">
-                        <!-- Success message will be inserted here -->
-                    </div>
-
-                    <div id="list-error" class="mb-3" style="display: none;">
-                        <!-- Error message will be inserted here -->
-                    </div>
-                    <!-- Lead Lists Section -->
-                    <div class="row">
-                        <div class="col-12 mb-4">
-                            <div class="card shadow">
-                                <div class="card-header">
-                                    <h5 class="mb-0">Lead Lists</h5>
-                                </div>
-                                <div class="card-body"> <!-- Search Lists -->
-                                    <div class="row mb-3">
-                                        <div class="col-md-6">
-                                            <div class="input-group">
-                                                <span class="input-group-text">
-                                                    <i class="bi bi-search"></i>
-                                                </span>
-                                                <input type="text" class="form-control" id="list-search"
-                                                    placeholder="Search lists by name or description...">
-                                                <button class="btn btn-outline-secondary" type="button"
-                                                    id="clear-list-search" title="Clear search">
-                                                    <i class="bi bi-x-circle"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div id="lead-lists-container">
-                                        <div class="text-center text-muted">
-                                            <i class="bi bi-list-ul fs-1"></i>
-                                            <p>Loading lists...</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-12">
-                            <div id="selected-list-panel" style="display: none;">
-                                <div class="card shadow">
-                                    <div class="card-header d-flex justify-content-between align-items-center">
-                                        <h5 class="mb-0" id="selected-list-title">Selected List</h5>
-                                        <div>
-                                            <button class="btn btn-sm btn-outline-primary me-2"
-                                                onclick="window.uploadManager.showBulkAddModal()">
-                                                <i class="bi bi-plus-lg me-1"></i> Add Leads
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-secondary me-2"
-                                                onclick="window.uploadManager.showEditListModal()">
-                                                <i class="bi bi-pencil me-1"></i> Edit List
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger"
-                                                onclick="window.uploadManager.deleteSelectedList()">
-                                                <i class="bi bi-trash me-1"></i> Delete List
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div class="card-body">
-                                        <div id="selected-list-info" class="mb-3">
-                                            <!-- List info will be displayed here -->
-                                        </div>
-
-                                        <!-- Search and Filter Section -->
-                                        <div class="card mb-3">
-                                            <div class="card-body">
-                                                <div class="row">
-                                                    <div class="col-md-6 mb-3 mb-md-0">
-                                                        <input type="text" class="form-control" id="upload-lead-search"
-                                                            placeholder="Search by name, email...">
-                                                    </div>
-                                                    <div class="col-md-3 mb-3 mb-md-0">
-                                                        <select class="form-select" id="upload-lead-status-filter">
-                                                            <option value="">All Statuses</option>
-                                                            <option value="new">New</option>
-                                                            <option value="No Answer">No Answer</option>
-                                                            <option value="Voice Mail">Voice Mail</option>
-                                                            <option value="Call Back Qualified">Call Back Qualified
-                                                            </option>
-                                                            <option value="Call Back NOT Qualified">Call Back NOT
-                                                                Qualified</option>
-                                                            <option value="deposited">Deposited</option>
-                                                            <option value="active">Active</option>
-                                                            <option value="withdrawn">Withdrawn</option>
-                                                            <option value="inactive">Inactive</option>
-                                                        </select>
-                                                    </div>
-                                                    <div class="col-md-3">
-                                                        <button class="btn btn-outline-secondary w-100"
-                                                            id="upload-reset-filters-btn">
-                                                            <i class="bi bi-x-circle me-1"></i> Reset
-                                                        </button>
-                                                    </div>
+                                    <!-- Search and Filter Section -->
+                                    <div class="card mb-3">
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6 mb-3 mb-md-0">
+                                                    <input type="text" class="form-control" id="upload-lead-search"
+                                                        placeholder="Search by name, email...">
+                                                </div>
+                                                <div class="col-md-3 mb-3 mb-md-0">
+                                                    <select class="form-select" id="upload-lead-status-filter">
+                                                        <option value="">All Statuses</option>
+                                                        <option value="new">New</option>
+                                                        <option value="No Answer">No Answer</option>
+                                                        <option value="Voice Mail">Voice Mail</option>
+                                                        <option value="Call Back Qualified">Call Back Qualified
+                                                        </option>
+                                                        <option value="Call Back NOT Qualified">Call Back NOT
+                                                            Qualified</option>
+                                                        <option value="deposited">Deposited</option>
+                                                        <option value="active">Active</option>
+                                                        <option value="withdrawn">Withdrawn</option>
+                                                        <option value="inactive">Inactive</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <button class="btn btn-outline-secondary w-100"
+                                                        id="upload-reset-filters-btn">
+                                                        <i class="bi bi-x-circle me-1"></i> Reset
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
 
-                                        <!-- Top Pagination Controls -->
-                                        <div class="d-flex justify-content-between align-items-center mb-3"
-                                            id="upload-pagination-section-top" style="display: none;">
-                                            <div class="d-flex align-items-center">
-                                                <label for="upload-leads-per-page-top"
-                                                    class="form-label me-2 mb-0">Show:</label>
-                                                <select class="form-select form-select-sm"
-                                                    id="upload-leads-per-page-top" style="width: auto;">
-                                                    <option value="10" selected>10 leads</option>
-                                                    <option value="50">50 leads</option>
-                                                    <option value="100">100 leads</option>
-                                                </select>
-                                                <span class="ms-3 text-muted" id="upload-pagination-info-top">-</span>
-                                            </div>
-                                            <div id="upload-leads-pagination-top" class="d-flex justify-content-center">
-                                                <!-- Top pagination will be added here -->
-                                            </div>
+                                    <!-- Top Pagination Controls -->
+                                    <div class="d-flex justify-content-between align-items-center mb-3"
+                                        id="upload-pagination-section-top" style="display: none;">
+                                        <div class="d-flex align-items-center">
+                                            <label for="upload-leads-per-page-top"
+                                                class="form-label me-2 mb-0">Show:</label>
+                                            <select class="form-select form-select-sm" id="upload-leads-per-page-top"
+                                                style="width: auto;">
+                                                <option value="10" selected>10 leads</option>
+                                                <option value="50">50 leads</option>
+                                                <option value="100">100 leads</option>
+                                            </select>
+                                            <span class="ms-3 text-muted" id="upload-pagination-info-top">-</span>
                                         </div>
-
-                                        <div id="selected-list-leads">
-                                            <!-- List leads will be displayed here -->
+                                        <div id="upload-leads-pagination-top" class="d-flex justify-content-center">
+                                            <!-- Top pagination will be added here -->
                                         </div>
+                                    </div>
 
-                                        <!-- Pagination Controls -->
-                                        <div class="d-flex justify-content-between align-items-center mt-3"
-                                            id="upload-pagination-section" style="display: none;">
-                                            <div class="d-flex align-items-center"></div>
-                                            <div id="upload-leads-pagination" class="d-flex justify-content-center">
-                                                <!-- Pagination will be added here -->
-                                            </div>
+                                    <div id="selected-list-leads">
+                                        <!-- List leads will be displayed here -->
+                                    </div>
+
+                                    <!-- Pagination Controls -->
+                                    <div class="d-flex justify-content-between align-items-center mt-3"
+                                        id="upload-pagination-section" style="display: none;">
+                                        <div class="d-flex align-items-center">
+                                            <label for="upload-leads-per-page"
+                                                class="form-label me-2 mb-0">Show:</label>
+                                            <select class="form-select form-select-sm" id="upload-leads-per-page"
+                                                style="width: auto;">
+                                                <option value="10" selected>10 leads</option>
+                                                <option value="50">50 leads</option>
+                                                <option value="100">100 leads</option>
+                                            </select>
+                                            <span class="ms-3 text-muted" id="upload-pagination-info">-</span>
+                                        </div>
+                                        <div id="upload-leads-pagination" class="d-flex justify-content-center">
+                                            <!-- Pagination will be added here -->
                                         </div>
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <div id="no-list-selected" class="card shadow">
-                                <div class="card-body text-center text-muted py-5">
-                                    <i class="bi bi-arrow-up fs-1"></i>
-                                    <p class="mt-3">Select a list from above to manage leads</p>
-                                </div>
+                        <div id="no-list-selected" class="card shadow">
+                            <div class="card-body text-center text-muted py-5">
+                                <i class="bi bi-arrow-up fs-1"></i>
+                                <p class="mt-3">Select a list from above to manage leads</p>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Users Page (Admin only) -->
-                <div id="users-page" class="page-content container-fluid mt-4" style="display: none;">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>Users</h2>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-danger" id="deactivate-all-users-btn" onclick="deactivateAllUsers()">
-                                <i class="bi bi-power me-1"></i> Deactivate ALL
-                            </button>
-                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
-                                <i class="bi bi-plus-circle me-1"></i> Add User
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card shadow">
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>Name</th>
-                                            <th>Email</th>
-                                            <th>Role</th>
-                                            <th>Status</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="users-table-body">
-                                        <!-- User rows will be populated here -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Custom Fields Page (Admin only) -->
-                <div id="fields-page" class="page-content container-fluid mt-4" style="display: none;">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>Custom Fields</h2>
-                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addFieldModal">
-                            <i class="bi bi-plus-circle me-1"></i> Add Field
+            <!-- Users Page (Admin only) -->
+            <div id="users-page" class="page-content container-fluid mt-4" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>Users</h2>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-danger" id="deactivate-all-users-btn" onclick="deactivateAllUsers()">
+                            <i class="bi bi-power me-1"></i> Deactivate ALL
+                        </button>
+                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                            <i class="bi bi-plus-circle me-1"></i> Add User
                         </button>
                     </div>
-                    <div class="card shadow">
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>Name</th>
-                                            <th>Label</th>
-                                            <th>Type</th>
-                                            <th>Required</th>
-                                            <th>Order</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="fields-table-body">
-                                        <!-- Field rows will be populated here -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div> <!-- Customers Page -->
-                <div id="customers-page" class="page-content container-fluid mt-4" style="display: none;">
-                    <!-- Customer List Cards Section -->
-                    <div class="mb-4">
-                        <div id="original-list-cards" class="original-list-cards-bar"></div>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>My Customers</h2>
-                    </div>
-
-                    <div class="card shadow mb-4">
-                        <div class="card-body">
-                            <div class="row mb-3">
-                                <div class="col-md-4">
-                                    <input type="text" class="form-control" id="customer-search"
-                                        placeholder="Search customers...">
-                                </div>
-                                <div class="col-md-3"> <select class="form-select" id="customer-status-filter">
-                                        <option value="">All Statuses</option>
-                                        <option value="new">New</option>
-                                        <option value="No Answer">No Answer</option>
-                                        <option value="Voice Mail">Voice Mail</option>
-                                        <option value="Call Back Qualified">Call Back Qualified</option>
-                                        <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
-                                        <option value="deposited">Deposited</option>
-                                        <option value="active">Active</option>
-                                        <option value="withdrawn">Withdrawn</option>
-                                        <option value="inactive">Inactive</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <button class="btn btn-outline-secondary" id="reset-customer-filters">Reset
-                                        Filters</button>
-                                </div>
-                            </div>
-
-                            <div class="table-responsive">
-                                <table class="table table-striped table-hover">
-                                    <thead id="customers-table-header">
-                                        <!-- Dynamic headers will be populated here -->
-                                    </thead>
-                                    <tbody id="customers-table-body">
-                                        <!-- Customer rows will be populated here -->
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div id="no-customers-message" class="alert alert-info text-center" style="display: none;">
-                                No customers found. Claim some leads to build your customer list!
-                            </div>
+                </div>
+                <div class="card shadow">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Role</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body">
+                                    <!-- User rows will be populated here -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Depositors Page -->
-                <div id="depositors-page" class="page-content container-fluid mt-4" style="display: none;">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2>My Depositors</h2>
-                    </div>
-
-                    <div class="card shadow mb-4">
-                        <div class="card-body">
-                            <div class="row mb-3">
-                                <div class="col-md-4">
-                                    <input type="text" class="form-control" id="depositor-search"
-                                        placeholder="Search depositors...">
-                                </div>
-                                <div class="col-md-3"> <select class="form-select" id="depositor-status-filter">
-                                        <option value="">All Statuses</option>
-                                        <option value="new">New</option>
-                                        <option value="No Answer">No Answer</option>
-                                        <option value="Voice Mail">Voice Mail</option>
-                                        <option value="Call Back Qualified">Call Back Qualified</option>
-                                        <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
-                                        <option value="deposited">Deposited</option>
-                                        <option value="active">Active</option>
-                                        <option value="withdrawn">Withdrawn</option>
-                                        <option value="inactive">Inactive</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <button class="btn btn-outline-secondary" id="reset-depositor-filters">Reset
-                                        Filters</button>
-                                </div>
-                            </div>
-
-                            <div class="table-responsive">
-                                <table class="table table-striped table-hover">
-                                    <thead id="depositors-table-header">
-                                        <!-- Dynamic headers will be populated here -->
-                                    </thead>
-                                    <tbody id="depositors-table-body">
-                                        <!-- Depositor rows will be populated here -->
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div id="no-depositors-message" class="alert alert-info text-center" style="display: none;">
-                                No depositors found. Move customers to depositors when they make deposits!
-                            </div>
+            <!-- Custom Fields Page (Admin only) -->
+            <div id="fields-page" class="page-content container-fluid mt-4" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>Custom Fields</h2>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addFieldModal">
+                        <i class="bi bi-plus-circle me-1"></i> Add Field
+                    </button>
+                </div>
+                <div class="card shadow">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Label</th>
+                                        <th>Type</th>
+                                        <th>Required</th>
+                                        <th>Order</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fields-table-body">
+                                    <!-- Field rows will be populated here -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                </div> <!-- Calendar Page -->
-                <div id="calendar-page" class="page-content container mt-4" style="display: none;">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2><i class="bi bi-calendar"></i> Appointments Calendar</h2>
-                    </div>
-                    <div class="card shadow mb-4">
-                        <div class="card-body">
-                            <div id="simple-calendar"></div>
+                </div>
+            </div> <!-- Customers Page -->
+            <div id="customers-page" class="page-content container-fluid mt-4" style="display: none;">
+                <!-- Customer List Cards Section -->
+                <div class="mb-4">
+                    <div id="original-list-cards" class="original-list-cards-bar"></div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>My Customers</h2>
+                </div>
+
+                <div class="card shadow mb-4">
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control" id="customer-search"
+                                    placeholder="Search customers...">
+                            </div>
+                            <div class="col-md-3"> <select class="form-select" id="customer-status-filter">
+                                    <option value="">All Statuses</option>
+                                    <option value="new">New</option>
+                                    <option value="No Answer">No Answer</option>
+                                    <option value="Voice Mail">Voice Mail</option>
+                                    <option value="Call Back Qualified">Call Back Qualified</option>
+                                    <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
+                                    <option value="deposited">Deposited</option>
+                                    <option value="active">Active</option>
+                                    <option value="withdrawn">Withdrawn</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-outline-secondary" id="reset-customer-filters">Reset
+                                    Filters</button>
+                            </div>
                         </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead id="customers-table-header">
+                                    <!-- Dynamic headers will be populated here -->
+                                </thead>
+                                <tbody id="customers-table-body">
+                                    <!-- Customer rows will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="no-customers-message" class="alert alert-info text-center" style="display: none;">
+                            No customers found. Claim some leads to build your customer list!
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Depositors Page -->
+            <div id="depositors-page" class="page-content container-fluid mt-4" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>My Depositors</h2>
+                </div>
+
+                <div class="card shadow mb-4">
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control" id="depositor-search"
+                                    placeholder="Search depositors...">
+                            </div>
+                            <div class="col-md-3"> <select class="form-select" id="depositor-status-filter">
+                                    <option value="">All Statuses</option>
+                                    <option value="new">New</option>
+                                    <option value="No Answer">No Answer</option>
+                                    <option value="Voice Mail">Voice Mail</option>
+                                    <option value="Call Back Qualified">Call Back Qualified</option>
+                                    <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
+                                    <option value="deposited">Deposited</option>
+                                    <option value="active">Active</option>
+                                    <option value="withdrawn">Withdrawn</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-outline-secondary" id="reset-depositor-filters">Reset
+                                    Filters</button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead id="depositors-table-header">
+                                    <!-- Dynamic headers will be populated here -->
+                                </thead>
+                                <tbody id="depositors-table-body">
+                                    <!-- Depositor rows will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div id="no-depositors-message" class="alert alert-info text-center" style="display: none;">
+                            No depositors found. Move customers to depositors when they make deposits!
+                        </div>
+                    </div>
+                </div>
+            </div> <!-- Calendar Page -->
+            <div id="calendar-page" class="page-content container mt-4" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="bi bi-calendar"></i> Appointments Calendar</h2>
+                </div>
+                <div class="card shadow mb-4">
+                    <div class="card-body">
+                        <div id="simple-calendar"></div>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
     </div>
 
     <!-- Edit Lead Modal -->
@@ -631,7 +639,7 @@
 
     <!-- Lead Notes Modal -->
     <div class="modal fade" id="leadNotesModal" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Lead Notes</h5>
@@ -957,60 +965,7 @@
             </div>
         </div>
     </div> <!-- Edit List Modal -->
-    <div class="modal fade" id="editListModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Edit List</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <form id="editListForm" onsubmit="window.uploadManager.handleEditList(event); return false;">
-                    <div class="modal-body">
-                        <input type="hidden" id="editListId" name="listId">
-
-                        <div class="mb-3">
-                            <label for="editListName" class="form-label">List Name *</label>
-                            <input type="text" class="form-control" id="editListName" name="name" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="editListDescription" class="form-label">Description</label>
-                            <textarea class="form-control" id="editListDescription" name="description"
-                                rows="3"></textarea>
-                        </div>
-
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="edit-list-visible" name="isVisible"
-                                    checked>
-                                <label class="form-check-label" for="edit-list-visible">
-                                    Visible to all agents
-                                </label>
-                            </div>
-                        </div>
-
-                        <div id="edit-specific-agents-section" class="mb-3" style="display: none;">
-                            <label class="form-label">Select Specific Agents</label>
-                            <div id="edit-agents-selection" class="border rounded p-2"
-                                style="max-height: 200px; overflow-y: auto;">
-                                <!-- Agent checkboxes will be populated here -->
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-danger me-auto"
-                            onclick="window.uploadManager.confirmDeleteList()">
-                            <i class="bi bi-trash me-1"></i> Delete List
-                        </button>
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-check-lg me-1"></i> Update List
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+  
 
 
     <!-- Inactivity Logout Modal -->
@@ -1047,6 +1002,7 @@
     <script src="js/Depositors.js"></script>
     <script src="js/Calendar.js"></script>
     <script src="js/app.js"></script>
+    <script src="js/sidebar-zoom-fix.js"></script>
 </body>
 
 </html>

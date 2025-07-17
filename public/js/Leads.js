@@ -14,14 +14,72 @@ class LeadsManager {
         this.useOptimizedRefresh = true; // Use optimized refresh by default
         // Pagination properties - now for server-side pagination
         this.currentPage = 1;
-        this.leadsPerPage = 10; // Default batch size
-        this.totalPages = 1;
-        this.totalCount = 0;
+        this.leadsPerPage = 10; // Default batch size for leads
+        this.listsCurrentPage = 1;
+        this.listsPerPage = 8; // Show 8 lead lists per page
+        this.listsTotalPages = 1;
         this.currentLeads = []; // Current page leads from server
         this.currentFilters = {}; // Track current search/status filters
         // Sorting
         constructor
     }    // Load leads
+
+
+
+
+    // Add this helper method to your class:
+    async renderMeetingsForLead(lead) {
+        const meetingsContainerId = 'lead-meetings-container';
+        let meetingsContainer = document.getElementById(meetingsContainerId);
+        if (!meetingsContainer) return;
+        meetingsContainer.innerHTML = '<div class="text-muted">Loading meetings...</div>';
+        try {
+            const resp = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/meetings/for-lead/${lead._id}`);
+            if (!resp.ok) throw new Error('Failed to fetch meetings');
+            let meetings = await resp.json();
+            if (!meetings.length) {
+                meetingsContainer.innerHTML = '<div class="text-muted">No meetings for this lead.</div>';
+            } else {
+                meetings = meetings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                meetingsContainer.innerHTML = `
+<div class="mb-2 fw-bold">Meetings for this Lead:</div>
+<div class="border rounded p-2 bg-light" style="max-height: 200px; overflow-y: auto;">
+    ${meetings.map(m => {
+                    let createdDate = m.createdAt ? new Date(m.createdAt).toLocaleString('en-GB') : '';
+                    let creatorName = 'Unknown User';
+                    if (m.createdBy) {
+                        if (typeof m.createdBy === 'object' && m.createdBy.name) {
+                            creatorName = m.createdBy.name;
+                        } else if (typeof m.createdBy === 'string') {
+                            creatorName = m.createdBy;
+                        }
+                    } else if (m.userName) {
+                        creatorName = m.userName;
+                    }
+                    let meetingDateTime = '';
+                    if (m.date && m.time) {
+                        const dateObj = new Date(`${m.date}T${m.time}`);
+                        meetingDateTime = dateObj.toLocaleString('en-GB');
+                    } else if (m.date) {
+                        meetingDateTime = new Date(m.date).toLocaleDateString('en-GB');
+                    }
+                    return `
+            <div class="note-item mb-2 border-bottom pb-2">
+                <div class="text-secondary small">${createdDate} - <strong>${creatorName}</strong></div>
+                <div><strong>${m.title || ''}</strong>${meetingDateTime ? ` <span class='ms-2'>${meetingDateTime}</span>` : ''}</div>
+                <div>${m.notes || ''}</div>
+            </div>
+        `;
+                }).join('')}
+</div>
+`;
+            }
+        } catch {
+            meetingsContainer.innerHTML = '<div class="text-danger">Failed to load meetings.</div>';
+        }
+    }
+
+
     async loadLeads() {
         try {
             // Load custom fields first
@@ -60,7 +118,38 @@ class LeadsManager {
         }
     }    // Update lead counts for each list (efficient single API call)
 
-    // 2. Add this sorting function to your class:
+
+    // Save current state (call before leaving Leads page)
+    saveLeadsPageState() {
+        const state = {
+            selectedListId: this.selectedListId,
+            currentPage: this.currentPage,
+            currentFilters: this.currentFilters
+        };
+        localStorage.setItem('leadsPageState', JSON.stringify(state));
+    }
+
+    // Restore state (call when entering Leads page)
+    async restoreLeadsPageState() {
+        const stateStr = localStorage.getItem('leadsPageState');
+        if (!stateStr) {
+            // No saved state, just load as usual
+            await this.refreshCurrentView();
+            return;
+        }
+        try {
+            const state = JSON.parse(stateStr);
+            if (state.selectedListId) this.selectedListId = state.selectedListId;
+            if (state.currentPage) this.currentPage = state.currentPage;
+            if (state.currentFilters) this.currentFilters = state.currentFilters;
+            await this.refreshCurrentView();
+        } catch (e) {
+            await this.refreshCurrentView();
+        }
+    }
+
+
+    //sorting function
     sortLeads() {
         if (!this.sortField) return;
         this.currentLeads.sort((a, b) => {
@@ -161,14 +250,22 @@ class LeadsManager {
             const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/lead-lists`);
             if (response.ok) {
                 this.allLeadLists = await response.json();
+                // Update total pages for lead lists
+                this.listsTotalPages = Math.max(1, Math.ceil(this.allLeadLists.length / this.listsPerPage));
+                // Clamp current page if needed
+                if (this.listsCurrentPage > this.listsTotalPages) {
+                    this.listsCurrentPage = this.listsTotalPages;
+                }
             } else {
                 this.allLeadLists = [];
+                this.listsTotalPages = 1;
             }
         } catch (err) {
             console.error('Error loading lead lists:', err);
             this.allLeadLists = [];
+            this.listsTotalPages = 1;
         }
-    }    // Display lead list cards
+    }
     displayLeadListCards(preventAutoSelect = false) {
         const cardsContainer = document.getElementById('lead-lists-cards');
         if (!cardsContainer) return;
@@ -187,10 +284,15 @@ class LeadsManager {
                     <small>Contact your administrator to create lead lists</small>
                 </div>
             `;
+            // Also clear pagination
+            this.renderLeadListPagination();
             return;
-        }        // Add individual list cards only
-        this.allLeadLists.forEach(list => {
-            // Use the leadCount from the API if available, otherwise default to 0
+        }
+        // Paginate lead lists
+        const startIdx = (this.listsCurrentPage - 1) * this.listsPerPage;
+        const endIdx = Math.min(startIdx + this.listsPerPage, this.allLeadLists.length);
+        const listsToShow = this.allLeadLists.slice(startIdx, endIdx);
+        listsToShow.forEach(list => {
             const leadCount = list.leadCount || 0;
             const card = this.createLeadListCard({
                 ...list,
@@ -199,11 +301,80 @@ class LeadsManager {
             cardsContainer.appendChild(card);
         });
 
+        // Render pagination controls for lead lists
+        this.renderLeadListPagination();
+
         // Auto-select first list if none is selected (but not during refresh)
         if (!preventAutoSelect && !this.selectedListId && this.allLeadLists.length > 0) {
             this.selectLeadList(this.allLeadLists[0]._id);
         }
-    }// Create individual lead list card
+    }
+
+    // Render pagination controls for lead lists
+    renderLeadListPagination() {
+        let container = document.getElementById('lead-lists-pagination');
+        if (!container) return;
+        container.innerHTML = '';
+        if (this.listsTotalPages <= 1) return;
+
+        const nav = document.createElement('nav');
+        nav.setAttribute('aria-label', 'Lead lists pagination');
+        const ul = document.createElement('ul');
+        ul.className = 'pagination pagination-sm mb-0';
+
+        // Previous button
+        const prevLi = document.createElement('li');
+        prevLi.className = `page-item ${this.listsCurrentPage === 1 ? 'disabled' : ''}`;
+        prevLi.innerHTML = `<a class="page-link" href="#" aria-label="Previous"><span aria-hidden="true">&laquo;</span></a>`;
+        if (this.listsCurrentPage > 1) {
+            prevLi.querySelector('a').addEventListener('click', (e) => {
+                e.preventDefault();
+                this.goToLeadListPage(this.listsCurrentPage - 1);
+            });
+        }
+        ul.appendChild(prevLi);
+
+        // Page numbers
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, this.listsCurrentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(this.listsTotalPages, startPage + maxVisiblePages - 1);
+        if (endPage - startPage < maxVisiblePages - 1) {
+            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+        }
+        for (let i = startPage; i <= endPage; i++) {
+            const li = document.createElement('li');
+            li.className = `page-item ${i === this.listsCurrentPage ? 'active' : ''}`;
+            li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+            if (i !== this.listsCurrentPage) {
+                li.querySelector('a').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.goToLeadListPage(i);
+                });
+            }
+            ul.appendChild(li);
+        }
+
+        // Next button
+        const nextLi = document.createElement('li');
+        nextLi.className = `page-item ${this.listsCurrentPage === this.listsTotalPages ? 'disabled' : ''}`;
+        nextLi.innerHTML = `<a class="page-link" href="#" aria-label="Next"><span aria-hidden="true">&raquo;</span></a>`;
+        if (this.listsCurrentPage < this.listsTotalPages) {
+            nextLi.querySelector('a').addEventListener('click', (e) => {
+                e.preventDefault();
+                this.goToLeadListPage(this.listsCurrentPage + 1);
+            });
+        }
+        ul.appendChild(nextLi);
+        nav.appendChild(ul);
+        container.appendChild(nav);
+    }
+
+    // Go to a specific page of lead lists
+    goToLeadListPage(page) {
+        if (page < 1 || page > this.listsTotalPages) return;
+        this.listsCurrentPage = page;
+        this.displayLeadListCards(true);
+    }
     createLeadListCard(list, isSelected = false) {
         const card = document.createElement('div');
         card.className = `lead-list-card ${isSelected ? 'selected' : ''}`;
@@ -896,7 +1067,7 @@ class LeadsManager {
         ];
 
         let statusHtml = `
-        <div class="status-dropdown-wrapper" data-bs-toggle="tooltip" data-bs-placement="top" title="Click to change status">
+        <div class="status-dropdown-wrapper" data-bs-toggle="tooltip" data-bs-placement="top">
             <select class="form-select form-select-sm lead-status-dropdown" 
                     data-lead-id="${lead._id}"
                     title="Change lead status" 
@@ -1130,6 +1301,8 @@ class LeadsManager {
         // Now we'll open the lead notes modal instead of the edit modal
         this.openLeadNotesModal(lead);
     }    // Open lead notes modal
+
+
     openLeadNotesModal(lead) {
         // Always keep a global reference to the last opened lead for modal sync
         window.lastOpenedLead = lead;
@@ -1249,6 +1422,102 @@ class LeadsManager {
                 notesOnlyModal.show();
             };
         }
+
+        // --- Add "Create Meeting" button below notes section ---
+        if (leadNotesContainer && !document.getElementById('create-meeting-btn')) {
+            const createMeetingBtn = document.createElement('button');
+            createMeetingBtn.type = 'button';
+            createMeetingBtn.className = 'btn btn-outline-success mt-2';
+            createMeetingBtn.id = 'create-meeting-btn';
+            createMeetingBtn.innerHTML = '<i class="bi bi-calendar-plus me-1"></i> Create Meeting';
+            leadNotesContainer.parentNode.appendChild(createMeetingBtn);
+
+            createMeetingBtn.onclick = () => {
+                // Show meeting modal
+                let modal = document.getElementById('leadMeetingModal');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.className = 'modal fade';
+                    modal.id = 'leadMeetingModal';
+                    modal.tabIndex = -1;
+                    modal.innerHTML = `
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Create Meeting for Lead</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <form id="lead-meeting-form">
+                                        <div class="mb-3">
+                                            <label for="lead-meeting-title" class="form-label">Title</label>
+                                            <input type="text" class="form-control" id="lead-meeting-title" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="lead-meeting-date" class="form-label">Date</label>
+                                            <input type="date" class="form-control" id="lead-meeting-date" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="lead-meeting-time" class="form-label">Time</label>
+                                            <input type="time" class="form-control" id="lead-meeting-time">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="lead-meeting-desc" class="form-label">Description</label>
+                                            <textarea class="form-control" id="lead-meeting-desc" rows="2"></textarea>
+                                        </div>
+                                    </form>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="button" class="btn btn-primary" id="save-lead-meeting-btn">Save Meeting</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                }
+                // Reset form fields
+                document.getElementById('lead-meeting-title').value = '';
+                document.getElementById('lead-meeting-date').value = '';
+                document.getElementById('lead-meeting-time').value = '';
+                document.getElementById('lead-meeting-desc').value = '';
+
+                // Show modal
+                const bsModal = new bootstrap.Modal(modal);
+                bsModal.show();
+
+                // Save handler
+                document.getElementById('save-lead-meeting-btn').onclick = async () => {
+                    const title = document.getElementById('lead-meeting-title').value.trim();
+                    const date = document.getElementById('lead-meeting-date').value;
+                    const time = document.getElementById('lead-meeting-time').value;
+                    const desc = document.getElementById('lead-meeting-desc').value.trim();
+                    if (!title || !date) return;
+
+                    // Save to backend via calendarManager
+                    const appt = {
+                        title,
+                        date,
+                        time,
+                        notes: desc,
+                        module: 'Lead',
+                        leadId: lead._id // Link to this lead
+                    };
+                    try {
+                        await window.calendarManager.saveAppointment(appt);
+                        this.apiManager.showAlert('Meeting created!', 'success');
+                        bsModal.hide();
+
+                        // --- NEW: Refresh meetings list in the modal ---
+                        this.renderMeetingsForLead(lead);
+                    } catch (err) {
+                        this.apiManager.showAlert('Failed to create meeting: ' + err.message, 'danger');
+                    }
+                };
+            };
+        }
+
+
         // Handle button visibility based on lead ownership
         const currentUser = this.apiManager.getCurrentUser();
         const isLeadOwned = lead.assignedTo && lead.assignedTo._id;
@@ -1305,6 +1574,69 @@ class LeadsManager {
 
         var modal = new bootstrap.Modal(document.getElementById('leadNotesModal'));
         modal.show();
+
+
+        // Fetch and display meetings for this lead
+        const meetingsContainerId = 'lead-meetings-container';
+        let meetingsContainer = document.getElementById(meetingsContainerId);
+        if (!meetingsContainer) {
+            meetingsContainer = document.createElement('div');
+            meetingsContainer.id = meetingsContainerId;
+            meetingsContainer.className = 'mt-3';
+            // Insert below notes section
+            if (leadNotesContainer && leadNotesContainer.parentNode) {
+                leadNotesContainer.parentNode.insertBefore(meetingsContainer, leadNotesContainer.nextSibling);
+            }
+        }
+        meetingsContainer.innerHTML = '<div class="text-muted">Loading meetings...</div>';
+        this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/meetings/for-lead/${lead._id}`)
+            .then(async resp => {
+                if (!resp.ok) throw new Error('Failed to fetch meetings');
+                let meetings = await resp.json();
+                if (!meetings.length) {
+                    meetingsContainer.innerHTML = '<div class="text-muted">No meetings for this lead.</div>';
+                } else {
+                    // Sort meetings by createdAt descending (most recent first)
+                    meetings = meetings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                    meetingsContainer.innerHTML = `
+<div class="mb-2 fw-bold">Meetings for this Lead:</div>
+<div class="border rounded p-2 bg-light" style="max-height: 200px; overflow-y: auto;">
+    ${meetings.map(m => {
+                        // ...existing mapping code...
+                        let createdDate = m.createdAt ? new Date(m.createdAt).toLocaleString('en-GB') : '';
+                        let creatorName = 'Unknown User';
+                        if (m.createdBy) {
+                            if (typeof m.createdBy === 'object' && m.createdBy.name) {
+                                creatorName = m.createdBy.name;
+                            } else if (typeof m.createdBy === 'string') {
+                                creatorName = m.createdBy;
+                            }
+                        } else if (m.userName) {
+                            creatorName = m.userName;
+                        }
+                        let meetingDateTime = '';
+                        if (m.date && m.time) {
+                            const dateObj = new Date(`${m.date}T${m.time}`);
+                            meetingDateTime = dateObj.toLocaleString('en-GB');
+                        } else if (m.date) {
+                            meetingDateTime = new Date(m.date).toLocaleDateString('en-GB');
+                        }
+                        return `
+            <div class="note-item mb-2 border-bottom pb-2">
+                <div class="text-secondary small">${createdDate} - <strong>${creatorName}</strong></div>
+                <div><strong>${m.title || ''}</strong>${meetingDateTime ? ` <span class='ms-2'>${meetingDateTime}</span>` : ''}</div>
+                <div>${m.notes || ''}</div>
+            </div>
+        `;
+                    }).join('')}
+</div>
+`;
+                }
+            })
+            .catch(() => {
+                meetingsContainer.innerHTML = '<div class="text-danger">Failed to load meetings.</div>';
+            });
+
         // Add event listener to the save note button
         var saveNoteBtn = document.getElementById('save-lead-note-btn');
         if (saveNoteBtn) {
@@ -1414,7 +1746,7 @@ class LeadsManager {
 
         // Create note elements
         sortedNotes.forEach(note => {
-            const noteDate = new Date(note.createdAt).toLocaleString();
+            const noteDate = new Date(note.createdAt).toLocaleString('en-GB');
             // Fix for accessing user name properly - check both object formats
             let userName = 'Unknown User';
             if (note.createdBy) {
@@ -1643,7 +1975,7 @@ class LeadsManager {
             // Create modal HTML
             const modalHtml = `
                 <div class="modal fade" id="transferLeadModal" tabindex="-1">
-                    <div class="modal-dialog">
+                    <div class="modal-dialog modal-xl modal-dialog-centered">
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h5 class="modal-title">Transfer Lead to List</h5>

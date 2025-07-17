@@ -465,7 +465,7 @@ class DepositorManager {    constructor(apiManager) {
             new Date(b.createdAt) - new Date(a.createdAt)
         );        // Create note elements
         sortedNotes.forEach(note => {
-            const noteDate = new Date(note.createdAt).toLocaleString();
+            const noteDate = new Date(note.createdAt).toLocaleString('en-GB');
             // Fix for accessing user name properly - check both object formats
             let userName = 'Unknown User';
             if (note.createdBy) {

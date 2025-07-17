@@ -6,6 +6,8 @@ const meetingSchema = new mongoose.Schema({
     date: { type: String, required: true }, // 'YYYY-MM-DD'
     time: { type: String }, // Optional, e.g. '14:00'
     notes: { type: String },
+    leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead' }, // <-- Add this line
+    module: { type: String }, // Optional, e.g. 'Lead'
     createdAt: { type: Date, default: Date.now }
 }, { _id: true });
 
@@ -91,11 +93,7 @@ const leadSchema = new mongoose.Schema({
 
 // Customer Schema - For leads that agents have claimed
 const customerSchema = new mongoose.Schema({
-    fullName: String,
-    email: String,
-    phone: String,
-    country: String,
-    language: String, status: {
+    status: {
         type: String,
         enum: ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'],
         default: 'new'
@@ -125,11 +123,7 @@ const customerSchema = new mongoose.Schema({
 
 // Depositor Schema - For customers that have been moved to depositors
 const depositorSchema = new mongoose.Schema({
-    fullName: String,
-    email: String,
-    phone: String,
-    country: String,
-    language: String, status: {
+    status: {
         type: String,
         enum: ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'],
         default: 'deposited'
@@ -159,34 +153,6 @@ const depositorSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-// Time Entry Schema - For agent clocking system
-const timeEntrySchema = new mongoose.Schema({
-    agent: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    date: { type: Date, required: true },
-    clockIn: { type: Date },
-    clockOut: { type: Date },
-    totalHours: { type: Number, default: 0 },
-    hourlyRate: { type: Number, default: 0 }, // Rate in ILS
-    totalPay: { type: Number, default: 0 }, // Total pay in ILS
-    status: { type: String, enum: ['clocked-in', 'clocked-out', 'manual'], default: 'clocked-out' },
-    isManualEntry: { type: Boolean, default: false },
-    notes: { type: String, default: '' },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // For manual entries by admin
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
-});
-
-// Pre-save middleware to calculate total hours and pay
-timeEntrySchema.pre('save', function (next) {
-    if (this.clockIn && this.clockOut) {
-        const hours = (this.clockOut - this.clockIn) / (1000 * 60 * 60); // Convert ms to hours
-        this.totalHours = Math.round(hours * 100) / 100; // Round to 2 decimal places
-        this.totalPay = Math.round(this.totalHours * this.hourlyRate * 100) / 100; // Round to 2 decimal places
-    }
-    this.updatedAt = new Date();
-    next();
-});
-
 // Add indexes for performance
 leadSchema.index({ leadList: 1, status: 1, assignedTo: 1, createdAt: -1 });
 leadSchema.index({ 'customFields.fullName': 'text', 'customFields.email': 'text', 'customFields.phone': 'text' });
@@ -201,7 +167,6 @@ const LeadField = mongoose.model('LeadField', leadFieldSchema);
 const LeadList = mongoose.model('LeadList', leadListSchema);
 const Customer = mongoose.model('Customer', customerSchema);
 const Depositor = mongoose.model('Depositor', depositorSchema);
-const TimeEntry = mongoose.model('TimeEntry', timeEntrySchema);
 
 module.exports = {
     User,
@@ -209,6 +174,5 @@ module.exports = {
     LeadField,
     LeadList,
     Customer,
-    Depositor,
-    TimeEntry
+    Depositor
 };

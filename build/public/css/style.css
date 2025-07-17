@@ -1,100 +1,140 @@
+html {
+    zoom: 0.8;
+    /* 90% zoom, change to 1 for 100% */
+}
+
+/* Make sure html and body always fill the viewport */
+
+
+/* Workaround for overlays and modals with CSS zoom: ensure they always cover the visible area */
+.modal-backdrop,
+.modal,
+#modal-overlay,
+#loading-screen {
+    min-width: 130vw;
+    min-height: 130vh;
+}
+
+#leads-page .table-responsive {
+    /* Remove max-height: 500px; */
+    height: calc(100vh - 340px);
+    /* Adjust 340px to fit your header/filters height */
+    min-height: 200px;
+    overflow-y: auto;
+}
+
 /* Calendar fixed grid layout for Calendar.js */
 .calendar-grid-fixed {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  /* max-width: 700px; */
-  margin: 0 auto 24px auto;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #fff;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    /* max-width: 700px; */
+    margin: 0 auto 24px auto;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
+
 .calendar-row {
-  display: flex;
+    display: flex;
 }
+
 .calendar-header-row {
-  background: #f8f9fa;
+    background: #f8f9fa;
 }
+
 .calendar-cell {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 0;
-  border: 1px solid #e0e0e0;
-  box-sizing: border-box;
-  padding: 0;
-  text-align: left;
-  width: 21.5%; /* 100/7 = 14.28%, 14.28*1.5=21.42 */
-  max-width: 210px;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    border: 1px solid #e0e0e0;
+    box-sizing: border-box;
+    padding: 0;
+    text-align: left;
+    width: 21.5%;
+    /* 100/7 = 14.28%, 14.28*1.5=21.42 */
+    max-width: 210px;
 }
+
 .calendar-header-cell {
-  font-weight: 600;
-  font-size: 1rem;
-  color: #495057;
-  text-align: center;
-  padding: 10px 0;
-  border-bottom: 2px solid #dee2e6;
-  background: #f8f9fa;
+    font-weight: 600;
+    font-size: 1rem;
+    color: #495057;
+    text-align: center;
+    padding: 10px 0;
+    border-bottom: 2px solid #dee2e6;
+    background: #f8f9fa;
 }
+
 /* Increased by 50% (90px → 135px) */
 .calendar-day-fixed {
-  height: 135px;
-  min-height: 135px;
-  max-height: 135px;
-  background: #fff;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 16px 18px 10px 18px;
-  position: relative;
-  transition: box-shadow 0.15s;
-  cursor: pointer;
-  overflow: hidden;
+    height: 135px;
+    min-height: 135px;
+    max-height: 135px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 16px 18px 10px 18px;
+    position: relative;
+    transition: box-shadow 0.15s;
+    cursor: pointer;
+    overflow: hidden;
 }
+
 .calendar-day-fixed.other-month {
-  background: #f8f9fa;
-  color: #adb5bd;
+    background: #f8f9fa;
+    color: #adb5bd;
 }
+
 .calendar-day-fixed.today {
-  border: 2px solid #0d6efd;
-  z-index: 1;
+    border: 2px solid #0d6efd;
+    z-index: 1;
 }
+
 .calendar-day-fixed .day-number {
-  font-weight: 700;
-  font-size: 1.1em;
-  margin-bottom: 2px;
+    font-weight: 700;
+    font-size: 1.1em;
+    margin-bottom: 2px;
 }
+
 .calendar-appts {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  width: 100%;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    width: 100%;
 }
+
 .calendar-appt {
-  font-size: 0.85em;
-  color: #c00;
-  text-align: left;
-  padding-left: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+    font-size: 0.85em;
+    color: #c00;
+    text-align: left;
+    padding-left: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
+
 @media (max-width: 900px) {
-  .calendar-grid-fixed {
-    max-width: 100%;
-  }
-  .calendar-cell {
-    max-width: 140px;
-  }
-  .calendar-day-fixed {
-    height: 105px;
-    min-height: 105px;
-    max-height: 105px;
-    font-size: 0.95em;
-    padding: 10px 10px 7px 10px;
-  }
+    .calendar-grid-fixed {
+        max-width: 100%;
+    }
+
+    .calendar-cell {
+        max-width: 140px;
+    }
+
+    .calendar-day-fixed {
+        height: 105px;
+        min-height: 105px;
+        max-height: 105px;
+        font-size: 0.95em;
+        padding: 10px 10px 7px 10px;
+    }
 }
+
 /* Custom styles for CRM application */
 body {
     background-color: #f8f9fa;
@@ -104,10 +144,31 @@ body {
 /* Sidebar Styles */
 .sidebar {
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    background-color: #343a40;
+    width: 200px;
+    min-width: 150px;
+    max-width: 250px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
     position: sticky;
     top: 0;
+}
+
+/* App shell for sidebar + main content layout */
+/* .app-shell {
+    display: flex;
     height: 100vh;
-    background-color: #343a40;
+    min-height: 100vh;
+} */
+
+.main-content {
+    flex: 1 1 0;
+    overflow: visible;
+    /* Change from 'auto' to 'visible' */
+    background-color: #f8f9fa;
+    padding: 0;
 }
 
 .sidebar .nav-link {
@@ -313,9 +374,7 @@ body {
     border: none;
     border-radius: 10px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    width: 150%;
-    /* Increased width by 25% */
-    max-width: 150%;
+    /* Remove width and max-width overrides! */
 }
 
 .modal-header {
@@ -746,7 +805,7 @@ body {
 
 /* Lead status dropdown styles */
 .lead-status-dropdown {
-    min-width: 160px;
+    /* min-width: 160px; */
     border: 1px solid #dee2e6;
     background-color: #fff !important;
     font-size: 0.875rem;
@@ -769,6 +828,9 @@ body {
     position: relative;
     z-index: 10;
     /* Ensure dropdown is above other elements */
+    width: auto;
+    min-width: unset;
+    max-width: 100%;
 }
 
 /* Remove dropdown arrow in Internet Explorer 10+ */
@@ -809,8 +871,9 @@ body {
 /* Table cell styling for status column */
 .table td .lead-status-dropdown {
     margin: 0;
+    width: auto;
+    min-width: unset;
     max-width: 100%;
-    width: 100%;
 }
 
 /* Styling for status options - these apply to the dropdown menu items */
@@ -908,13 +971,13 @@ body {
 }
 
 /* Improve mobile responsiveness for the status dropdown */
-@media (max-width: 767.98px) {
+/* @media (max-width: 767.98px) {
     .lead-status-dropdown {
         min-width: 120px;
         font-size: 0.8rem;
         padding: 0.25rem 0.5rem;
     }
-}
+} */
 
 /* Customer status dropdown styles (mirror lead status dropdown) */
 .customer-status-dropdown {
@@ -941,6 +1004,9 @@ body {
     position: relative;
     z-index: 10;
     /* Ensure dropdown is above other elements */
+    width: auto;
+    min-width: unset;
+    max-width: 100%;
 }
 
 /* Remove dropdown arrow in Internet Explorer 10+ */
@@ -981,8 +1047,9 @@ body {
 /* Table cell styling for status column */
 .table td .customer-status-dropdown {
     margin: 0;
+    width: auto;
+    min-width: unset;
     max-width: 100%;
-    width: 100%;
 }
 
 /* Styling for status options - these apply to the dropdown menu items */
@@ -1107,6 +1174,9 @@ body {
     position: relative;
     z-index: 10;
     /* Ensure dropdown is above other elements */
+    width: auto;
+    min-width: unset;
+    max-width: 100%;
 }
 
 /* Remove dropdown arrow in Internet Explorer 10+ */
@@ -1147,8 +1217,9 @@ body {
 /* Table cell styling for status column */
 .table td .depositor-status-dropdown {
     margin: 0;
+    width: auto;
+    min-width: unset;
     max-width: 100%;
-    width: 100%;
 }
 
 /* Styling for status options - these apply to the dropdown menu items */
