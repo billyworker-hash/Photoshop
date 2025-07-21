@@ -33,25 +33,28 @@ async function ensureUsersWithNoListExists() {
         let usersWithNoList = await LeadList.findOne({ name: 'Users with no list' });
         if (!usersWithNoList) {
             usersWithNoList = new LeadList({
-                name: 'Users with no list',
+                name: 'Clients with no list',
                 description: 'Default list for users whose original lead list has been deleted',
                 labels: [
-                    { name: 'fullName', label: 'Full Name', type: 'text' },
-                    { name: 'email', label: 'Email', type: 'email' },
-                    { name: 'phone', label: 'Phone', type: 'text' },
-                    { name: 'company', label: 'Company', type: 'text' }
+                    { name: 'First Name', label: 'First Name', type: 'text' },
+                    { name: 'Last Name', label: 'Last Name', type: 'text' },
+                    { name: 'Email', label: 'Email', type: 'email' },
+                    { name: 'Phone', label: 'Phone', type: 'text' },
+                    { name: 'Amount', label: 'Amount', type: 'text' },
+                    { name: 'Date', label: 'Date', type: 'text' },
+                    { name: 'Brand', label: 'Brand', type: 'text' },
                 ],
                 isSystem: true, // Mark as system list
-                isVisible: true // Ensure system lists are visible by default
+                isVisible: false // Ensure system lists are visible by default
             });
 
             await usersWithNoList.save();
-            console.log('Created "Users with no list" system list');
+            console.log('Created "Clients with no list" system list');
         }
 
         return usersWithNoList;
     } catch (error) {
-        console.error('Error ensuring Users with no list:', error);
+        console.error('Error ensuring Clients with no list:', error);
         return null;
     }
 }
