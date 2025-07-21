@@ -237,7 +237,7 @@ app.get('/api/leads', authenticate, async (req, res) => {
         const leads = await Lead.find(filter)
             .populate('assignedTo', 'name')
             .populate('notes.createdBy', 'name')
-            .sort({ createdAt: 1 })
+            .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
 
