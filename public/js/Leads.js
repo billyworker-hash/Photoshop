@@ -21,7 +21,6 @@ class LeadsManager {
         this.currentLeads = []; // Current page leads from server
         this.currentFilters = {}; // Track current search/status filters
         // Sorting
-        constructor
     }    // Load leads
 
 
@@ -618,6 +617,16 @@ class LeadsManager {
         phoneLinks.forEach(span => {
             const phoneLinkHandler = (e) => {
                 e.stopPropagation(); // Prevent the row click event
+                const row = span.closest('tr');
+                if (!row) return;
+
+                // Remove highlight from any other row that might be highlighted
+                const currentlyCallingRows = document.querySelectorAll('.calling-lead');
+                currentlyCallingRows.forEach(r => {
+                    r.classList.remove('calling-lead');
+                    r.style.fontWeight = '';
+                    Array.from(r.children).forEach(cell => cell.style.backgroundColor = '');
+                });
 
                 // Get the phone number from the data attribute
                 const phoneNumber = span.getAttribute('data-phone');
@@ -625,6 +634,13 @@ class LeadsManager {
 
                 // Try to open the SIP URL in a new way that doesn't block the UI
                 try {
+                    // Highlight the current row by styling all its cells
+                    row.classList.add('calling-lead');
+                    row.style.fontWeight = 'bold';
+                    Array.from(row.children).forEach(cell => {
+                        cell.style.backgroundColor = '#fffbe6';
+                    });
+
                     // Create a temporary iframe to handle the SIP protocol
                     const iframe = document.createElement('iframe');
                     iframe.style.display = 'none';
@@ -636,6 +652,9 @@ class LeadsManager {
                         document.body.removeChild(iframe);
                     }, 1000);
                 } catch (error) {
+                    row.classList.remove('calling-lead');
+                    row.style.fontWeight = '';
+                    Array.from(row.children).forEach(cell => cell.style.backgroundColor = '');
                     // Fallback: try to open directly (this might still cause delay)
                     window.location.href = sipUrl;
                 }
@@ -1311,6 +1330,21 @@ class LeadsManager {
             resetModalButtons();
         }
 
+        console.log('Lead object for modal:', lead);
+        const modalTitle = document.querySelector('#leadNotesModal .modal-title');
+        if (modalTitle) {
+            const firstName = lead.customFields?.firstName || lead.customFields?.['First Name'] || '';
+            const lastName = lead.customFields?.lastName || lead.customFields?.['Last Name'] || '';
+            let leadName = `${firstName} ${lastName}`.trim();
+            if (!leadName) {
+                leadName = lead.customFields?.fullName || lead.customFields?.['Full Name'] || '';
+            }
+            let email = lead.customFields?.email || lead.customFields?.Email || lead.email || '';
+            modalTitle.innerHTML = leadName;
+            if (email) {
+                modalTitle.innerHTML += `<br><span style="font-size:0.95em;color:#555;">${email}</span>`;
+            }
+        }
         // Clean up any existing modal event listeners
         this.cleanupModalEventListeners();
         var leadNoteId = document.getElementById('lead-note-id');
@@ -1759,15 +1793,20 @@ class LeadsManager {
                     }
                 }
             }
+            // Replace newlines with <br> for display
+            const noteContentHtml = note.content
+                ? note.content.replace(/\n/g, '<br>')
+                : '';
             const noteDiv = document.createElement('div');
             noteDiv.className = 'note-item mb-2 border-bottom pb-2';
             noteDiv.innerHTML = `
-                <div class="text-secondary small">${noteDate} - <strong>${userName}</strong></div>
-                <div>${note.content}</div>
-            `;
+            <div class="text-secondary small">${noteDate} - <strong>${userName}</strong></div>
+            <div>${noteContentHtml}</div>
+        `;
             container.appendChild(noteDiv);
         });
     }
+
     // Save lead note (add note or update status) - now renders instantly and does not close modal
     async saveLeadNote(leadId) {
         const noteContent = document.getElementById('lead-note-content').value.trim();
@@ -2405,7 +2444,6 @@ class LeadsManager {
             await this.updateLeadListCounts();
 
             // Update lead list cards to reflect any visibility changes and updated counts
-            // This is crucial for agents to see when admin hides/shows lists
             this.displayLeadListCards(true);
 
             // Check if currently selected list is still visible to current user
@@ -2445,8 +2483,8 @@ class LeadsManager {
             this.totalPages = newTotalPages;
             this.totalCount = newTotalCount;
 
-            // Only update the table body content (most efficient)
-            this.updateTableBodyOnly(newLeads);
+            // Only update the row data (not the whole table)
+            this.updateTableRowDataOnly(newLeads);
 
             // If pagination changed, update pagination controls
             if (paginationChanged) {
@@ -2463,108 +2501,57 @@ class LeadsManager {
         }
     }
 
-    // Update only the table body content without rebuilding headers or pagination
-    updateTableBodyOnly(leads) {
-        this.sortLeads();
+    /**
+     * Update only the data (cell values) in the table rows for leads that have changed.
+     * This avoids rebuilding the entire table and preserves event listeners.
+     */
+    updateTableRowDataOnly(newLeads) {
         const tableBody = document.getElementById('leads-table-body');
-        const noLeadsMessage = document.getElementById('no-leads-message');
-
         if (!tableBody) return;
 
-        // Clean up existing row event listeners
-        this.cleanupRowEventListeners();
+        // Find the currently focused status dropdown (if any)
+        const activeDropdown = document.activeElement && document.activeElement.classList.contains('lead-status-dropdown')
+            ? document.activeElement
+            : null;
+        const activeLeadId = activeDropdown ? activeDropdown.getAttribute('data-lead-id') : null;
 
-        tableBody.innerHTML = '';
+        newLeads.forEach(newLead => {
+            const row = tableBody.querySelector(`tr[data-lead-id="${newLead._id}"]`);
+            if (!row) return; // Row might not exist if pagination changed
 
-        // Show/hide no leads message
-        if (leads.length === 0) {
-            if (noLeadsMessage) noLeadsMessage.style.display = 'block';
-            return;
-        } else {
-            if (noLeadsMessage) noLeadsMessage.style.display = 'none';
-        }
-
-        // Add new lead rows
-        leads.forEach(lead => {
-            const row = document.createElement('tr');
-            row.innerHTML = this.generateLeadRow(lead);
-            row.dataset.leadId = lead._id;
-
-            // Check if lead is owned
-            const isOwned = lead.assignedTo && lead.assignedTo._id;
-
-            // Make all leads clickable
-            row.style.cursor = 'pointer';
-
-            if (isOwned) {
-                row.classList.add('owned-lead');
+            // If the status dropdown for this row is currently focused, skip updating the entire row
+            if (activeLeadId && newLead._id === activeLeadId) {
+                return;
             }
 
+            // Parse the new row HTML for this lead (reuse your generateLeadRow)
+            const tempRow = document.createElement('tr');
+            tempRow.innerHTML = this.generateLeadRow(newLead);
 
-            // Add row click handler (robust: do not open modal if clicking phone link or its children)
-            const rowClickHandler = (e) => {
-                // Prevent modal if clicking on phone link or any of its children
-                if (
-                    e.target.closest('.phone-link') ||
-                    e.target.closest('.big-phone-link') ||
-                    e.target.closest('button') ||
-                    e.target.closest('select') ||
-                    e.target.closest('.dropdown')
-                ) {
-                    return;
+            // Update each cell's innerHTML if changed
+            Array.from(row.children).forEach((cell, idx) => {
+                const newCell = tempRow.children[idx];
+                if (newCell && cell.innerHTML !== newCell.innerHTML) {
+                    cell.innerHTML = newCell.innerHTML;
                 }
-                this.openEditLeadModal(lead);
-            };
-            row.addEventListener('click', rowClickHandler);
-
-            this.eventListeners.push({
-                element: row,
-                event: 'click',
-                handler: rowClickHandler
             });
 
-            tableBody.appendChild(row);
-        });
-        // Add event listeners to phone-link spans for click-to-call after rows are added
-        const phoneLinks = tableBody.querySelectorAll('.phone-link');
-        phoneLinks.forEach(span => {
-            const phoneLinkHandler = (e) => {
-                e.stopPropagation(); // Prevent the row click event
-                // Get the phone number from the data attribute
-                const phoneNumber = span.getAttribute('data-phone');
-                if (!phoneNumber) return;
-                const sipUrl = `sip:${phoneNumber}`;
-                try {
-                    // Create a temporary iframe to handle the SIP protocol
-                    const iframe = document.createElement('iframe');
-                    iframe.style.display = 'none';
-                    iframe.src = sipUrl;
-                    document.body.appendChild(iframe);
-                    setTimeout(() => {
-                        document.body.removeChild(iframe);
-                    }, 1000);
-                } catch (error) {
-                    // Fallback: try to open directly
-                    window.location.href = sipUrl;
-                }
-            };
-            span.addEventListener('click', phoneLinkHandler);
-            this.eventListeners.push({
-                element: span,
-                event: 'click',
-                handler: phoneLinkHandler
-            });
+            // Optionally, update row classes (e.g., owned-lead)
+            if (newLead.assignedTo && newLead.assignedTo._id) {
+                row.classList.add('owned-lead');
+            } else {
+                row.classList.remove('owned-lead');
+            }
         });
 
-        // Apply status colors to all dropdowns
+        // Optionally, update status colors and tooltips
         this.applyStatusColors();
-
-        // Initialize Bootstrap tooltips for new elements
         const tooltips = tableBody.querySelectorAll('[data-bs-toggle="tooltip"]');
         tooltips.forEach(tooltip => {
             new bootstrap.Tooltip(tooltip);
         });
     }
+
 
     // Update only pagination info text (not the buttons)
     updatePaginationInfo() {

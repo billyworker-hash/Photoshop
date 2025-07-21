@@ -1473,3 +1473,9 @@ th.sortable-header:hover {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
     text-decoration: underline;
 }
+
+tr.calling-lead {
+    background-color: #dfbc0f !important; /* A light yellow highlight */
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+}

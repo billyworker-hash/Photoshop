@@ -358,289 +358,294 @@ class CustomerManager {
             saveNoteBtn.parentNode.replaceChild(newSaveBtn, saveNoteBtn);
             newSaveBtn.addEventListener('click', () => this.saveCustomerNote(customer._id));
         }
-    
-    // Add event listener to the release customer button
-    if(releaseLeadBtn) {
-        // Remove any existing event listeners to prevent duplicates
-        var newReleaseBtn = releaseLeadBtn.cloneNode(true);
-        releaseLeadBtn.parentNode.replaceChild(newReleaseBtn, releaseLeadBtn);
 
-        // Add new event listener
-        newReleaseBtn.addEventListener('click', () => {
-            this.releaseCustomer(customer._id);
-        });
+        // Add event listener to the release customer button
+        if (releaseLeadBtn) {
+            // Remove any existing event listeners to prevent duplicates
+            var newReleaseBtn = releaseLeadBtn.cloneNode(true);
+            releaseLeadBtn.parentNode.replaceChild(newReleaseBtn, releaseLeadBtn);
+
+            // Add new event listener
+            newReleaseBtn.addEventListener('click', () => {
+                this.releaseCustomer(customer._id);
+            });
+        }
+
+        // Add event listener to the move to depositors button
+        if (moveToDepositorsBtn) {
+            // Remove any existing event listeners to prevent duplicates
+            var newMoveBtn = moveToDepositorsBtn.cloneNode(true);
+            moveToDepositorsBtn.parentNode.replaceChild(newMoveBtn, moveToDepositorsBtn);
+
+            // Add new event listener
+            newMoveBtn.addEventListener('click', () => {
+                this.moveToDepositors(customer._id);
+            });
+        }
     }
 
-    // Add event listener to the move to depositors button
-    if(moveToDepositorsBtn) {
-        // Remove any existing event listeners to prevent duplicates
-        var newMoveBtn = moveToDepositorsBtn.cloneNode(true);
-        moveToDepositorsBtn.parentNode.replaceChild(newMoveBtn, moveToDepositorsBtn);
+    // Display customer notes (mirrors displayLeadNotes)
+    displayCustomerNotes(customer, container) {
+        if (!container) return;
 
-        // Add new event listener
-        newMoveBtn.addEventListener('click', () => {
-            this.moveToDepositors(customer._id);
-        });
-    }
-}
+        container.innerHTML = '';
 
-// Display customer notes (mirrors displayLeadNotes)
-displayCustomerNotes(customer, container) {
-    if (!container) return;
+        if (!customer.notes || customer.notes.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-2">No notes yet</div>';
+            return;
+        }
 
-    container.innerHTML = '';
+        // Sort notes by newest first
+        const sortedNotes = [...customer.notes].sort((a, b) =>
+            new Date(b.createdAt) - new Date(a.createdAt)
+        );
 
-    if (!customer.notes || customer.notes.length === 0) {
-        container.innerHTML = '<div class="text-center text-muted py-2">No notes yet</div>';
-        return;
-    }
-
-    // Sort notes by newest first
-    const sortedNotes = [...customer.notes].sort((a, b) =>
-        new Date(b.createdAt) - new Date(a.createdAt)
-    );        // Create note elements
-    sortedNotes.forEach(note => {
-        const noteDate = new Date(note.createdAt).toLocaleString('en-GB');
-        // Fix for accessing user name properly - check both object formats
-        let userName = 'Unknown User';
-        if (note.createdBy) {
-            if (typeof note.createdBy === 'object' && note.createdBy.name) {
-                userName = note.createdBy.name;
-            } else if (typeof note.createdBy === 'string') {
-                // If only ID is present without population, get current user if it matches
-                const currentUser = this.apiManager.getCurrentUser();
-                if (currentUser && currentUser.id === note.createdBy) {
-                    userName = currentUser.name;
+        sortedNotes.forEach(note => {
+            const noteDate = new Date(note.createdAt).toLocaleString('en-GB');
+            // Fix for accessing user name properly - check both object formats
+            let userName = 'Unknown User';
+            if (note.createdBy) {
+                if (typeof note.createdBy === 'object' && note.createdBy.name) {
+                    userName = note.createdBy.name;
+                } else if (typeof note.createdBy === 'string') {
+                    // If only ID is present without population, get current user if it matches
+                    const currentUser = this.apiManager.getCurrentUser();
+                    if (currentUser && currentUser.id === note.createdBy) {
+                        userName = currentUser.name;
+                    }
                 }
             }
-        }
-        const noteDiv = document.createElement('div');
-        noteDiv.className = 'note-item mb-2 border-bottom pb-2';
-        noteDiv.innerHTML = `
-                <div class="text-secondary small">${noteDate} - <strong>${userName}</strong></div>
-                <div>${note.content}</div>
-            `;
-        container.appendChild(noteDiv);
-    });
-}
+            // Replace newlines with <br> for display
+            const noteContentHtml = note.content
+                ? note.content.replace(/\n/g, '<br>')
+                : '';
+            const noteDiv = document.createElement('div');
+            noteDiv.className = 'note-item mb-2 border-bottom pb-2';
+            noteDiv.innerHTML = `
+            <div class="text-secondary small">${noteDate} - <strong>${userName}</strong></div>
+            <div>${noteContentHtml}</div>
+        `;
+            container.appendChild(noteDiv);
+        });
+    }
 
     // Save customer note (mirrors saveLeadNote)
     async saveCustomerNote(customerId) {
-    const noteContent = document.getElementById('lead-note-content').value.trim();
-    const noteStatus = document.getElementById('lead-note-status').value;
+        const noteContent = document.getElementById('lead-note-content').value.trim();
+        const noteStatus = document.getElementById('lead-note-status').value;
 
-    try {
-        const currentUser = this.apiManager.getCurrentUser();
-        const data = { status: noteStatus };
-        if (noteContent) {
-            data.note = {
-                content: noteContent,
-                createdBy: currentUser ? currentUser.id : null
-            };
+        try {
+            const currentUser = this.apiManager.getCurrentUser();
+            const data = { status: noteStatus };
+            if (noteContent) {
+                data.note = {
+                    content: noteContent,
+                    createdBy: currentUser ? currentUser.id : null
+                };
+            }
+
+            const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/customers/${customerId}/notes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to save customer note');
+            }
+
+            // Update the notes in the modal instantly
+            const updatedCustomer = await response.json();
+            const notesContainer = document.getElementById('lead-notes-container');
+            if (notesContainer) {
+                this.displayCustomerNotes(updatedCustomer, notesContainer);
+            }
+
+            // --- Update the in-memory customer object in allCustomers ---
+            const idx = this.allCustomers.findIndex(c => c._id === customerId);
+            if (idx !== -1) {
+                this.allCustomers[idx].notes = updatedCustomer.notes;
+                this.allCustomers[idx].status = updatedCustomer.status;
+            }
+            // Also update window.lastOpenedLead if present and matches
+            if (window.lastOpenedLead && window.lastOpenedLead._id === customerId) {
+                window.lastOpenedLead.notes = updatedCustomer.notes;
+                window.lastOpenedLead.status = updatedCustomer.status;
+            }
+
+            // Clear the textarea after saving
+            const noteContentInput = document.getElementById('lead-note-content');
+            if (noteContentInput) noteContentInput.value = '';
+
+            // Show generic saved message
+            if (typeof this.showSavedToast === 'function') {
+                this.showSavedToast();
+            } else {
+                this.apiManager.showAlert('Saved !', 'success');
+            }
+
+            // Only show status toast if status was actually changed
+            const prevStatus = this.allCustomers?.find(c => c._id === customerId)?.status;
+            if (noteStatus && prevStatus && noteStatus !== prevStatus && typeof this.showStatusUpdateToast === 'function') {
+                this.showStatusUpdateToast(noteStatus);
+            }
+        } catch (err) {
+            console.error('Error saving customer note:', err);
+            this.apiManager.showAlert('Failed to save note: ' + err.message, 'danger');
         }
-
-        const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/customers/${customerId}/notes`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to save customer note');
-        }
-
-        // Update the notes in the modal instantly
-        const updatedCustomer = await response.json();
-        const notesContainer = document.getElementById('lead-notes-container');
-        if (notesContainer) {
-            this.displayCustomerNotes(updatedCustomer, notesContainer);
-        }
-
-        // --- Update the in-memory customer object in allCustomers ---
-        const idx = this.allCustomers.findIndex(c => c._id === customerId);
-        if (idx !== -1) {
-            this.allCustomers[idx].notes = updatedCustomer.notes;
-            this.allCustomers[idx].status = updatedCustomer.status;
-        }
-        // Also update window.lastOpenedLead if present and matches
-        if (window.lastOpenedLead && window.lastOpenedLead._id === customerId) {
-            window.lastOpenedLead.notes = updatedCustomer.notes;
-            window.lastOpenedLead.status = updatedCustomer.status;
-        }
-
-        // Clear the textarea after saving
-        const noteContentInput = document.getElementById('lead-note-content');
-        if (noteContentInput) noteContentInput.value = '';
-
-        // Show generic saved message
-        if (typeof this.showSavedToast === 'function') {
-            this.showSavedToast();
-        } else {
-            this.apiManager.showAlert('Saved !', 'success');
-        }
-
-        // Only show status toast if status was actually changed
-        const prevStatus = this.allCustomers?.find(c => c._id === customerId)?.status;
-        if (noteStatus && prevStatus && noteStatus !== prevStatus && typeof this.showStatusUpdateToast === 'function') {
-            this.showStatusUpdateToast(noteStatus);
-        }
-    } catch (err) {
-        console.error('Error saving customer note:', err);
-        this.apiManager.showAlert('Failed to save note: ' + err.message, 'danger');
-    }
-}    // Release Customer - Convert customer back to lead
+    }    // Release Customer - Convert customer back to lead
     async releaseCustomer(customerId) {
-    try {
-        // Check if there's unsaved note content in the modal
-        const noteContent = document.getElementById('lead-note-content')?.value?.trim();
-        const noteStatus = document.getElementById('lead-note-status')?.value;
+        try {
+            // Check if there's unsaved note content in the modal
+            const noteContent = document.getElementById('lead-note-content')?.value?.trim();
+            const noteStatus = document.getElementById('lead-note-status')?.value;
 
-        // If there's note content, save it first before releasing the customer
-        if (noteContent) {
-            await this.saveCustomerNote(customerId);
-            // Small delay to ensure the note is saved before proceeding
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
-
-        const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/customers/${customerId}/release`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
+            // If there's note content, save it first before releasing the customer
+            if (noteContent) {
+                await this.saveCustomerNote(customerId);
+                // Small delay to ensure the note is saved before proceeding
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
-        });
 
-        if (!response.ok) {
-            throw new Error('Failed to release customer');
+            const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/customers/${customerId}/release`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to release customer');
+            }
+
+            const result = await response.json();
+
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
+            if (modal) modal.hide();
+            // Reload customers to reflect changes
+            await this.loadCustomers();
+
+            // Show success message using the apiManager.showAlert
+            this.apiManager.showAlert('Customer successfully released back to leads pool', 'success');
+
+        } catch (err) {
+            console.error('Error releasing customer:', err);
+            this.apiManager.showAlert(`Error: ${err.message}`, 'danger');
         }
-
-        const result = await response.json();
-
-        // Close modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
-        if (modal) modal.hide();
-        // Reload customers to reflect changes
-        await this.loadCustomers();
-
-        // Show success message using the apiManager.showAlert
-        this.apiManager.showAlert('Customer successfully released back to leads pool', 'success');
-
-    } catch (err) {
-        console.error('Error releasing customer:', err);
-        this.apiManager.showAlert(`Error: ${err.message}`, 'danger');
-    }
-}    // Move customer to depositors list
+    }    // Move customer to depositors list
     async moveToDepositors(customerId) {
-    try {
-        // Check if there's unsaved note content in the modal
-        const noteContent = document.getElementById('lead-note-content')?.value?.trim();
-        const noteStatus = document.getElementById('lead-note-status')?.value;
+        try {
+            // Check if there's unsaved note content in the modal
+            const noteContent = document.getElementById('lead-note-content')?.value?.trim();
+            const noteStatus = document.getElementById('lead-note-status')?.value;
 
-        // If there's note content, save it first before moving the customer
-        if (noteContent) {
-            await this.saveCustomerNote(customerId);
-            // Small delay to ensure the note is saved before proceeding
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
-
-        const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/customers/${customerId}/move-to-depositors`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
+            // If there's note content, save it first before moving the customer
+            if (noteContent) {
+                await this.saveCustomerNote(customerId);
+                // Small delay to ensure the note is saved before proceeding
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
-        });
 
-        if (!response.ok) {
-            throw new Error('Failed to move customer to depositors');
+            const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/customers/${customerId}/move-to-depositors`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to move customer to depositors');
+            }
+
+            const result = await response.json();
+
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
+            if (modal) modal.hide();
+
+            // Reload customers to reflect changes
+            await this.loadCustomers();
+
+            this.apiManager.showAlert('Customer successfully moved to depositors list', 'success');
+
+        } catch (err) {
+            console.error('Error moving customer to depositors:', err);
+            this.apiManager.showAlert(`Error: ${err.message}`, 'danger');
         }
-
-        const result = await response.json();
-
-        // Close modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('leadNotesModal'));
-        if (modal) modal.hide();
-
-        // Reload customers to reflect changes
-        await this.loadCustomers();
-
-        this.apiManager.showAlert('Customer successfully moved to depositors list', 'success');
-
-    } catch (err) {
-        console.error('Error moving customer to depositors:', err);
-        this.apiManager.showAlert(`Error: ${err.message}`, 'danger');
-    }
-}    // Update customer status from dropdown
+    }    // Update customer status from dropdown
     async updateCustomerStatus(customerId, newStatus) {
-    try {
-        const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/customers/${customerId}/notes`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ status: newStatus })
-        });
+        try {
+            const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/customers/${customerId}/notes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ status: newStatus })
+            });
 
-        if (!response.ok) {
-            throw new Error('Failed to update customer status');
-        }
+            if (!response.ok) {
+                throw new Error('Failed to update customer status');
+            }
 
-        // Update the customer in our local array
-        const customerIndex = this.allCustomers.findIndex(customer => customer._id === customerId);
-        if (customerIndex !== -1) {
-            this.allCustomers[customerIndex].status = newStatus;
-        }
+            // Update the customer in our local array
+            const customerIndex = this.allCustomers.findIndex(customer => customer._id === customerId);
+            if (customerIndex !== -1) {
+                this.allCustomers[customerIndex].status = newStatus;
+            }
 
-        // Visual feedback - briefly highlight the dropdown with classes
-        const dropdown = document.querySelector(`[data-customer-id="${customerId}"]`);
-        if (dropdown) {
-            // Add animation and success feedback classes
-            dropdown.classList.add('status-update-animation');
-            dropdown.classList.add('success-feedback');
+            // Visual feedback - briefly highlight the dropdown with classes
+            const dropdown = document.querySelector(`[data-customer-id="${customerId}"]`);
+            if (dropdown) {
+                // Add animation and success feedback classes
+                dropdown.classList.add('status-update-animation');
+                dropdown.classList.add('success-feedback');
 
-            // Apply new status color immediately
-            this.applyStatusColors();
+                // Apply new status color immediately
+                this.applyStatusColors();
 
-            // Remove animation classes after animation completes
-            setTimeout(() => {
-                dropdown.classList.remove('success-feedback');
-                dropdown.classList.remove('status-update-animation');
-            }, 1000);
-        }
+                // Remove animation classes after animation completes
+                setTimeout(() => {
+                    dropdown.classList.remove('success-feedback');
+                    dropdown.classList.remove('status-update-animation');
+                }, 1000);
+            }
 
-        // Show status update toast
-        this.showStatusUpdateToast(newStatus);
+            // Show status update toast
+            this.showStatusUpdateToast(newStatus);
 
-    } catch (err) {
-        console.error('Error updating customer status:', err);
-        this.apiManager.showAlert(`Error updating status: ${err.message}`, 'danger');
+        } catch (err) {
+            console.error('Error updating customer status:', err);
+            this.apiManager.showAlert(`Error updating status: ${err.message}`, 'danger');
 
-        // Revert the dropdown to the previous value
-        const dropdown = document.querySelector(`[data-customer-id="${customerId}"]`);
-        if (dropdown) {
-            const customer = this.allCustomers.find(c => c._id === customerId);
-            if (customer) {
-                dropdown.value = customer.status || 'new';
+            // Revert the dropdown to the previous value
+            const dropdown = document.querySelector(`[data-customer-id="${customerId}"]`);
+            if (dropdown) {
+                const customer = this.allCustomers.find(c => c._id === customerId);
+                if (customer) {
+                    dropdown.value = customer.status || 'new';
+                }
             }
         }
     }
-}
 
-// Show status update toast notification
-showStatusUpdateToast(status) {
-    // Create toast container if it doesn't exist
-    let toastContainer = document.querySelector('.toast-container');
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
-        document.body.appendChild(toastContainer);
-    }
+    // Show status update toast notification
+    showStatusUpdateToast(status) {
+        // Create toast container if it doesn't exist
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
 
-    // Create unique ID for this toast
-    const toastId = 'status-toast-' + Date.now();
+        // Create unique ID for this toast
+        const toastId = 'status-toast-' + Date.now();
 
-    // Create toast HTML
-    const toastHtml = `
+        // Create toast HTML
+        const toastHtml = `
             <div id="${toastId}" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
                 <div class="d-flex">
                     <div class="toast-body">
@@ -651,85 +656,85 @@ showStatusUpdateToast(status) {
             </div>
         `;
 
-    // Add toast to container
-    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+        // Add toast to container
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
 
-    // Initialize and show the toast
-    const toastElement = document.getElementById(toastId);
-    const toast = new bootstrap.Toast(toastElement, {
-        autohide: true,
-        delay: 3000
-    });
-    toast.show();
+        // Initialize and show the toast
+        const toastElement = document.getElementById(toastId);
+        const toast = new bootstrap.Toast(toastElement, {
+            autohide: true,
+            delay: 3000
+        });
+        toast.show();
 
-    // Remove toast from DOM after it's hidden
-    toastElement.addEventListener('hidden.bs.toast', () => {
-        toastElement.remove();
-    });
-}    // Apply color styling to dropdowns based on selected status
-applyStatusColors() {
-    document.querySelectorAll('.customer-status-dropdown').forEach(dropdown => {
-        const status = dropdown.value;
-        // Remove existing status color classes
-        dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail',
-            'status-call-back-qualified', 'status-call-back-not-qualified');
+        // Remove toast from DOM after it's hidden
+        toastElement.addEventListener('hidden.bs.toast', () => {
+            toastElement.remove();
+        });
+    }    // Apply color styling to dropdowns based on selected status
+    applyStatusColors() {
+        document.querySelectorAll('.customer-status-dropdown').forEach(dropdown => {
+            const status = dropdown.value;
+            // Remove existing status color classes
+            dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail',
+                'status-call-back-qualified', 'status-call-back-not-qualified');
 
-        // Add class based on current status
-        switch (status) {
-            case 'new':
-                dropdown.classList.add('status-new');
-                break;
-            case 'No Answer':
-                dropdown.classList.add('status-no-answer');
-                break;
-            case 'Voice Mail':
-                dropdown.classList.add('status-voice-mail');
-                break;
-            case 'Call Back Qualified':
-                dropdown.classList.add('status-call-back-qualified');
-                break;
-            case 'Call Back NOT Qualified':
-                dropdown.classList.add('status-call-back-not-qualified');
-                break;
+            // Add class based on current status
+            switch (status) {
+                case 'new':
+                    dropdown.classList.add('status-new');
+                    break;
+                case 'No Answer':
+                    dropdown.classList.add('status-no-answer');
+                    break;
+                case 'Voice Mail':
+                    dropdown.classList.add('status-voice-mail');
+                    break;
+                case 'Call Back Qualified':
+                    dropdown.classList.add('status-call-back-qualified');
+                    break;
+                case 'Call Back NOT Qualified':
+                    dropdown.classList.add('status-call-back-not-qualified');
+                    break;
+            }
+        });
+    }// Helper function to safely get field values
+    getField(obj, fieldName) {
+        if (!obj) return '';
+
+        // First check direct properties
+        if (obj[fieldName]) return obj[fieldName];
+
+        // Then check customFields
+        if (obj.customFields && obj.customFields[fieldName]) {
+            return obj.customFields[fieldName];
         }
-    });
-}// Helper function to safely get field values
-getField(obj, fieldName) {
-    if (!obj) return '';
 
-    // First check direct properties
-    if (obj[fieldName]) return obj[fieldName];
-
-    // Then check customFields
-    if (obj.customFields && obj.customFields[fieldName]) {
-        return obj.customFields[fieldName];
+        return '';
     }
 
-    return '';
-}
+    // Check if a field is a phone field (for click-to-call)
+    isPhoneField(fieldName) {
+        return fieldName && (
+            fieldName.toLowerCase().includes('phone') ||
+            fieldName.toLowerCase().includes('tel') ||
+            fieldName.toLowerCase().includes('mobile') ||
+            fieldName.toLowerCase().includes('cell')
+        );
+    }
 
-// Check if a field is a phone field (for click-to-call)
-isPhoneField(fieldName) {
-    return fieldName && (
-        fieldName.toLowerCase().includes('phone') ||
-        fieldName.toLowerCase().includes('tel') ||
-        fieldName.toLowerCase().includes('mobile') ||
-        fieldName.toLowerCase().includes('cell')
-    );
-}
+    // Format phone number for SIP calling
+    formatPhoneForCall(phoneNumber) {
+        if (!phoneNumber) return '';
+        // Remove all non-numeric characters except +
+        return phoneNumber.replace(/[^\d+]/g, '');
+    }    // Format phone number for display with just a phone icon to save space
+    formatPhoneForDisplay(phoneNumber) {
+        if (!phoneNumber) return '';
 
-// Format phone number for SIP calling
-formatPhoneForCall(phoneNumber) {
-    if (!phoneNumber) return '';
-    // Remove all non-numeric characters except +
-    return phoneNumber.replace(/[^\d+]/g, '');
-}    // Format phone number for display with just a phone icon to save space
-formatPhoneForDisplay(phoneNumber) {
-    if (!phoneNumber) return '';
-
-    // Return a different phone icon to save maximum space
-    return '☎️';
-}
+        // Return a different phone icon to save maximum space
+        return '☎️';
+    }
 }
 
 // Initialize the customer manager when the page is loaded
