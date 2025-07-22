@@ -355,7 +355,7 @@ class UploadManager {
                 <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
                 <option value="deposited">Deposited</option>
                 <option value="active">Active</option>
-                <option value="withdrawn">Withdrawn</option>
+             
                 <option value="inactive">Inactive</option>
             </select>
             <small class="text-muted">This will apply to all leads</small>

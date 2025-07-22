@@ -1,3 +1,160 @@
+/* ========================================
+   UNIFIED STATUS STYLES FOR ALL MODULES
+   (Leads, Customers, Depositors)
+   ======================================== */
+
+/* Status Badge Styles - Background colors for status badges/spans */
+.status-new {
+    background-color: #6c757d !important;
+    color: #fff !important;
+}
+
+.status-no-answer {
+    background-color: #fd7e14 !important;
+    color: #fff !important;
+}
+
+.status-hang-up {
+    background-color: #dc3545 !important;
+    color: #fff !important;
+}
+
+.status-voice-mail {
+    background-color: #ffc107 !important;
+    color: #000 !important;
+}
+
+.status-no-service {
+    background-color: #6c757d !important;
+    color: #fff !important;
+}
+
+.status-call-back-qualified {
+    background-color: #198754 !important;
+    color: #fff !important;
+}
+
+.status-call-back-not-qualified {
+    background-color: #dc3545 !important;
+    color: #fff !important;
+}
+
+.status-deposited {
+    background-color: #20c997 !important;
+    color: #000 !important;
+}
+
+.status-active {
+    background-color: #0dcaf0 !important;
+    color: #000 !important;
+}
+
+.status-inactive {
+    background-color: #6f42c1 !important;
+    color: #fff !important;
+}
+
+/* Dropdown Styles - Text colors for dropdown options and selected values */
+.lead-status-dropdown option[value="new"],
+.lead-status-dropdown.status-new,
+.customer-status-dropdown option[value="new"],
+.customer-status-dropdown.status-new,
+.depositor-status-dropdown option[value="new"],
+.depositor-status-dropdown.status-new {
+    color: #6c757d !important;
+    font-weight: bold;
+}
+
+.lead-status-dropdown option[value="No Answer"],
+.lead-status-dropdown.status-no-answer,
+.customer-status-dropdown option[value="No Answer"],
+.customer-status-dropdown.status-no-answer,
+.depositor-status-dropdown option[value="No Answer"],
+.depositor-status-dropdown.status-no-answer {
+    color: #fd7e14 !important;
+    font-weight: bold;
+}
+
+.lead-status-dropdown option[value="Hang Up"],
+.lead-status-dropdown.status-hang-up,
+.customer-status-dropdown option[value="Hang Up"],
+.customer-status-dropdown.status-hang-up,
+.depositor-status-dropdown option[value="Hang Up"],
+.depositor-status-dropdown.status-hang-up {
+    color: #dc3545 !important;
+    font-weight: bold;
+}
+
+.lead-status-dropdown option[value="Voice Mail"],
+.lead-status-dropdown.status-voice-mail,
+.customer-status-dropdown option[value="Voice Mail"],
+.customer-status-dropdown.status-voice-mail,
+.depositor-status-dropdown option[value="Voice Mail"],
+.depositor-status-dropdown.status-voice-mail {
+    color: #ffc107 !important;
+    font-weight: bold;
+}
+
+.lead-status-dropdown option[value="No Service"],
+.lead-status-dropdown.status-no-service,
+.customer-status-dropdown option[value="No Service"],
+.customer-status-dropdown.status-no-service,
+.depositor-status-dropdown option[value="No Service"],
+.depositor-status-dropdown.status-no-service {
+    color: #6c757d !important;
+    font-weight: bold;
+}
+
+.lead-status-dropdown option[value="Call Back Qualified"],
+.lead-status-dropdown.status-call-back-qualified,
+.customer-status-dropdown option[value="Call Back Qualified"],
+.customer-status-dropdown.status-call-back-qualified,
+.depositor-status-dropdown option[value="Call Back Qualified"],
+.depositor-status-dropdown.status-call-back-qualified {
+    color: #198754 !important;
+    font-weight: bold;
+}
+
+.lead-status-dropdown option[value="Call Back NOT Qualified"],
+.lead-status-dropdown.status-call-back-not-qualified,
+.customer-status-dropdown option[value="Call Back NOT Qualified"],
+.customer-status-dropdown.status-call-back-not-qualified,
+.depositor-status-dropdown option[value="Call Back NOT Qualified"],
+.depositor-status-dropdown.status-call-back-not-qualified {
+    color: #dc3545 !important;
+    font-weight: bold;
+}
+
+.lead-status-dropdown option[value="deposited"],
+.lead-status-dropdown.status-deposited,
+.customer-status-dropdown option[value="deposited"],
+.customer-status-dropdown.status-deposited,
+.depositor-status-dropdown option[value="deposited"],
+.depositor-status-dropdown.status-deposited {
+    color: #20c997 !important;
+    font-weight: bold;
+}
+
+.lead-status-dropdown option[value="active"],
+.lead-status-dropdown.status-active,
+.customer-status-dropdown option[value="active"],
+.customer-status-dropdown.status-active,
+.depositor-status-dropdown option[value="active"],
+.depositor-status-dropdown.status-active {
+    color: #0dcaf0 !important;
+    font-weight: bold;
+}
+
+.lead-status-dropdown option[value="inactive"],
+.lead-status-dropdown.status-inactive,
+.customer-status-dropdown option[value="inactive"],
+.customer-status-dropdown.status-inactive,
+.depositor-status-dropdown option[value="inactive"],
+.depositor-status-dropdown.status-inactive {
+    color: #6f42c1 !important;
+    font-weight: bold;
+}
+
 html {
     zoom: 0.8;
     /* 90% zoom, change to 1 for 100% */
@@ -309,51 +466,7 @@ body {
     font-size: 0.75rem;
 }
 
-/* Status colors for leads */
-.status-new {
-    color: #6c757d;
-    font-weight: bold;
-}
-
-.status-no-answer {
-    color: #fd7e14;
-    font-weight: bold;
-}
-
-.status-voice-mail {
-    color: #0d6efd;
-    font-weight: bold;
-}
-
-.status-call-back-qualified {
-    color: #198754;
-    font-weight: bold;
-}
-
-.status-call-back-not-qualified {
-    color: #dc3545;
-    font-weight: bold;
-}
-
-.status-deposited {
-    color: #20c997;
-    font-weight: bold;
-}
-
-.status-active {
-    color: #0dcaf0;
-    font-weight: bold;
-}
-
-.status-withdrawn {
-    color: #f8d7da;
-    font-weight: bold;
-}
-
-.status-inactive {
-    color: #6f42c1;
-    font-weight: bold;
-}
+/* Note: Status colors are now defined in the unified section above */
 
 /* Form controls */
 .form-control,
@@ -533,42 +646,7 @@ body {
     cursor: pointer;
 }
 
-/* Status badge styles for new status values */
-.status-no-answer {
-    background-color: #6c757d !important;
-}
-
-.status-voice-mail {
-    background-color: #ffc107 !important;
-    color: #000 !important;
-}
-
-.status-call-back-qualified {
-    background-color: #198754 !important;
-}
-
-.status-call-back-not-qualified {
-    background-color: #dc3545 !important;
-}
-
-.status-deposited {
-    background-color: #20c997 !important;
-    color: #000 !important;
-}
-
-.status-active {
-    background-color: #0dcaf0 !important;
-    color: #000 !important;
-}
-
-.status-withdrawn {
-    background-color: #f8d7da !important;
-    color: #721c24 !important;
-}
-
-.status-inactive {
-    background-color: #6f42c1 !important;
-}
+/* Note: Status badge styles are now defined in the unified section above */
 
 /* Modal improvements */
 .modal-xl {
@@ -905,9 +983,7 @@ body {
     color: #0dcaf0;
 }
 
-.lead-status-dropdown option[value="withdrawn"] {
-    color: #f8d7da;
-}
+
 
 .lead-status-dropdown option[value="inactive"] {
     color: #6f42c1;
@@ -942,9 +1018,7 @@ body {
     color: #0dcaf0;
 }
 
-.lead-status-dropdown.status-withdrawn {
-    color: #f8d7da;
-}
+
 
 .lead-status-dropdown.status-inactive {
     color: #6f42c1;
@@ -1081,9 +1155,7 @@ body {
     color: #0dcaf0;
 }
 
-.customer-status-dropdown option[value="withdrawn"] {
-    color: #f8d7da;
-}
+
 
 .customer-status-dropdown option[value="inactive"] {
     color: #6f42c1;
@@ -1118,12 +1190,23 @@ body {
     color: #0dcaf0;
 }
 
-.customer-status-dropdown.status-withdrawn {
-    color: #f8d7da;
-}
+
 
 .customer-status-dropdown.status-inactive {
     color: #6f42c1;
+}
+
+/* Make all status dropdowns and their options bold */
+.lead-status-dropdown,
+.customer-status-dropdown,
+.depositor-status-dropdown {
+    font-weight: bold;
+}
+
+.lead-status-dropdown option,
+.customer-status-dropdown option,
+.depositor-status-dropdown option {
+    font-weight: bold;
 }
 
 /* Make sure dropdowns don't inherit table hover color */
@@ -1251,9 +1334,7 @@ body {
     color: #0dcaf0;
 }
 
-.depositor-status-dropdown option[value="withdrawn"] {
-    color: #f8d7da;
-}
+
 
 .depositor-status-dropdown option[value="inactive"] {
     color: #6f42c1;
@@ -1288,9 +1369,7 @@ body {
     color: #0dcaf0;
 }
 
-.depositor-status-dropdown.status-withdrawn {
-    color: #f8d7da;
-}
+
 
 .depositor-status-dropdown.status-inactive {
     color: #6f42c1;
@@ -1475,7 +1554,8 @@ th.sortable-header:hover {
 }
 
 tr.calling-lead {
-    background-color: #dfbc0f !important; /* A light yellow highlight */
+    background-color: #dfbc0f !important;
+    /* A light yellow highlight */
     font-weight: bold;
     transition: background-color 0.3s ease;
 }

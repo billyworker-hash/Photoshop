@@ -1,5 +1,47 @@
 // Leads.js - Handles lead management functionality
 class LeadsManager {
+    // Apply status color classes to all status dropdowns and options
+    applyStatusColors() {
+        // Statuses and their corresponding CSS classes
+        const statusClassMap = {
+            'new': 'status-new',
+            'No Answer': 'status-no-answer',
+            'Hang Up': 'status-hang-up',
+            'Voice Mail': 'status-voice-mail',
+            'No Service': 'status-no-service',
+            'Call Back Qualified': 'status-call-back-qualified',
+            'Call Back NOT Qualified': 'status-call-back-not-qualified',
+            'deposited': 'status-deposited',
+            'active': 'status-active',
+            'inactive': 'status-inactive'
+        };
+        const allStatusClasses = Object.values(statusClassMap);
+
+        // For each status dropdown
+        document.querySelectorAll('.lead-status-dropdown').forEach(select => {
+            // Remove all status classes from the select
+            select.classList.remove(...allStatusClasses);
+            // Add the class for the selected status
+            const status = select.value;
+            if (statusClassMap[status]) {
+                select.classList.add(statusClassMap[status]);
+            }
+            // Make bold
+            select.style.fontWeight = 'bold';
+
+            // For each option, apply the color class
+            Array.from(select.options).forEach(option => {
+                // Remove all status classes
+                option.classList.remove(...allStatusClasses);
+                // Add the class for this option's status
+                if (statusClassMap[option.value]) {
+                    option.classList.add(statusClassMap[option.value]);
+                }
+                // Make bold
+                option.style.fontWeight = 'bold';
+            });
+        });
+    }
     constructor(apiManager) {
         this.apiManager = apiManager;
         this.allLeadLists = [];
@@ -1076,12 +1118,13 @@ class LeadsManager {
         const statusOptions = [
             'new',
             'No Answer',
+            'Hang Up',
             'Voice Mail',
+            'No Service',
             'Call Back Qualified',
             'Call Back NOT Qualified',
             'deposited',
             'active',
-            'withdrawn',
             'inactive'
         ];
 
@@ -2313,7 +2356,6 @@ class LeadsManager {
             // Remove existing status color classes
             dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail',
                 'status-call-back-qualified', 'status-call-back-not-qualified');
-
             // Add class based on current status
             switch (status) {
                 case 'new':
@@ -2322,14 +2364,29 @@ class LeadsManager {
                 case 'No Answer':
                     dropdown.classList.add('status-no-answer');
                     break;
+                case 'Hang Up':
+                    dropdown.classList.add('status-hang-up');
+                    break;
                 case 'Voice Mail':
                     dropdown.classList.add('status-voice-mail');
+                    break;
+                case 'No Service':
+                    dropdown.classList.add('status-no-service');
                     break;
                 case 'Call Back Qualified':
                     dropdown.classList.add('status-call-back-qualified');
                     break;
                 case 'Call Back NOT Qualified':
                     dropdown.classList.add('status-call-back-not-qualified');
+                    break;
+                case 'deposited':
+                    dropdown.classList.add('status-deposited');
+                    break;
+                case 'active':
+                    dropdown.classList.add('status-active');
+                    break;
+                case 'inactive':
+                    dropdown.classList.add('status-inactive');
                     break;
             }
         });

@@ -10,6 +10,38 @@ function formatDateDMY(dateInput) {
 }
 // Customers.js - Handle customer list functionality (mirrors Leads.js structure)
 class CustomerManager {
+    // Apply status color classes to all status dropdowns and options
+    applyStatusColors() {
+        const statusClassMap = {
+            'new': 'status-new',
+            'No Answer': 'status-no-answer',
+            'Hang Up': 'status-hang-up',
+            'Voice Mail': 'status-voice-mail',
+            'No Service': 'status-no-service',
+            'Call Back Qualified': 'status-call-back-qualified',
+            'Call Back NOT Qualified': 'status-call-back-not-qualified',
+            'deposited': 'status-deposited',
+            'active': 'status-active',
+            'inactive': 'status-inactive'
+        };
+        const allStatusClasses = Object.values(statusClassMap);
+
+        document.querySelectorAll('.customer-status-dropdown').forEach(select => {
+            select.classList.remove(...allStatusClasses);
+            const status = select.value;
+            if (statusClassMap[status]) {
+                select.classList.add(statusClassMap[status]);
+            }
+            select.style.fontWeight = 'bold';
+            Array.from(select.options).forEach(option => {
+                option.classList.remove(...allStatusClasses);
+                if (statusClassMap[option.value]) {
+                    option.classList.add(statusClassMap[option.value]);
+                }
+                option.style.fontWeight = 'bold';
+            });
+        });
+    }
     constructor(apiManager) {
         this.apiManager = apiManager;
         this.allCustomers = [];
@@ -252,7 +284,7 @@ class CustomerManager {
         const createdDate = formatDateDMY(customer.createdAt);
         rowHtml += `<td>${createdDate}</td>`;
         // Add Status dropdown
-        const statusOptions = ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'];
+        const statusOptions = ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'No Service', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'inactive'];
         const currentStatus = customer.status || 'new';
         rowHtml += `
             <td>
@@ -687,14 +719,29 @@ class CustomerManager {
                 case 'No Answer':
                     dropdown.classList.add('status-no-answer');
                     break;
+                case 'Hang Up':
+                    dropdown.classList.add('status-hang-up');
+                    break;
                 case 'Voice Mail':
                     dropdown.classList.add('status-voice-mail');
+                    break;
+                case 'No Service':
+                    dropdown.classList.add('status-no-service');
                     break;
                 case 'Call Back Qualified':
                     dropdown.classList.add('status-call-back-qualified');
                     break;
                 case 'Call Back NOT Qualified':
                     dropdown.classList.add('status-call-back-not-qualified');
+                    break;
+                case 'deposited':
+                    dropdown.classList.add('status-deposited');
+                    break;
+                case 'active':
+                    dropdown.classList.add('status-active');
+                    break;
+                case 'inactive':
+                    dropdown.classList.add('status-inactive');
                     break;
             }
         });

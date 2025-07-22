@@ -244,7 +244,7 @@ class DepositorManager {
         const createdDate = new Date(depositor.createdAt).toLocaleDateString();
         rowHtml += `<td>${createdDate}</td>`;
         // Add Status
-        const statusOptions = ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'];
+        const statusOptions = ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'No Service', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'inactive'];
         const currentStatus = depositor.status || 'new';
         rowHtml += `
             <td>
@@ -795,14 +795,29 @@ class DepositorManager {
                 case 'No Answer':
                     dropdown.classList.add('status-no-answer');
                     break;
+                case 'Hang Up':
+                    dropdown.classList.add('status-hang-up');
+                    break;
                 case 'Voice Mail':
                     dropdown.classList.add('status-voice-mail');
+                    break;
+                case 'No Service':
+                    dropdown.classList.add('status-no-service');
                     break;
                 case 'Call Back Qualified':
                     dropdown.classList.add('status-call-back-qualified');
                     break;
                 case 'Call Back NOT Qualified':
                     dropdown.classList.add('status-call-back-not-qualified');
+                    break;
+                case 'deposited':
+                    dropdown.classList.add('status-deposited');
+                    break;
+                case 'active':
+                    dropdown.classList.add('status-active');
+                    break;
+                case 'inactive':
+                    dropdown.classList.add('status-inactive');
                     break;
             }
         });

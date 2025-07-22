@@ -1712,7 +1712,7 @@ app.patch('/api/depositors/:id/status', authenticate, async (req, res) => {
         if (!status) {
             return res.status(400).json({ message: 'Status is required' });
         }
-        const validStatuses = ['new', 'No Answer', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'withdrawn', 'inactive'];
+        const validStatuses = ['new', 'No Answer', 'Hang Up', 'No Service', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'inactive'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ message: 'Invalid status' });
         }
