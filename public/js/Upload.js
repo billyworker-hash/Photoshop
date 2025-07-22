@@ -498,9 +498,8 @@ class UploadManager {
     // Parse textarea input into array (one value per line)
     parseTextareaInput(text) {
         if (!text) return [];
-        return text.split('\n')
-            .map(line => line.trim())
-            .filter(line => line.length > 0);
+        // Preserve empty lines so indexes match up
+        return text.split('\n').map(line => line.trim());
     }    // Create Create List Modal
     createCreateListModal() {
         if (document.getElementById('createListModal')) return;
