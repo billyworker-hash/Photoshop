@@ -244,7 +244,7 @@ class DepositorManager {
         const createdDate = new Date(depositor.createdAt).toLocaleDateString();
         rowHtml += `<td>${createdDate}</td>`;
         // Add Status
-        const statusOptions = ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'No Service', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'inactive'];
+        const statusOptions = ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited'];
         const currentStatus = depositor.status || 'new';
         rowHtml += `
             <td>
@@ -785,7 +785,7 @@ class DepositorManager {
             const status = dropdown.value;
             // Remove existing status color classes
             dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail',
-                'status-call-back-qualified', 'status-call-back-not-qualified');
+                'status-call-back-qualified', 'status-call-back-not-qualified', 'status-hang-up', 'status-deposited', 'status-wrong-number');
 
             // Add class based on current status
             switch (status) {
@@ -801,8 +801,8 @@ class DepositorManager {
                 case 'Voice Mail':
                     dropdown.classList.add('status-voice-mail');
                     break;
-                case 'No Service':
-                    dropdown.classList.add('status-no-service');
+                case 'Wrong Number':
+                    dropdown.classList.add('status-wrong-number');
                     break;
                 case 'Call Back Qualified':
                     dropdown.classList.add('status-call-back-qualified');
@@ -812,12 +812,6 @@ class DepositorManager {
                     break;
                 case 'deposited':
                     dropdown.classList.add('status-deposited');
-                    break;
-                case 'active':
-                    dropdown.classList.add('status-active');
-                    break;
-                case 'inactive':
-                    dropdown.classList.add('status-inactive');
                     break;
             }
         });

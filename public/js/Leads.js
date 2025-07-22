@@ -8,12 +8,10 @@ class LeadsManager {
             'No Answer': 'status-no-answer',
             'Hang Up': 'status-hang-up',
             'Voice Mail': 'status-voice-mail',
-            'No Service': 'status-no-service',
+            'Wrong Number': 'status-wrong-number',
             'Call Back Qualified': 'status-call-back-qualified',
             'Call Back NOT Qualified': 'status-call-back-not-qualified',
-            'deposited': 'status-deposited',
-            'active': 'status-active',
-            'inactive': 'status-inactive'
+            'deposited': 'status-deposited'
         };
         const allStatusClasses = Object.values(statusClassMap);
 
@@ -56,7 +54,7 @@ class LeadsManager {
         this.useOptimizedRefresh = true; // Use optimized refresh by default
         // Pagination properties - now for server-side pagination
         this.currentPage = 1;
-        this.leadsPerPage = 10; // Default batch size for leads
+        this.leadsPerPage = 100; // Default batch size for leads
         this.listsCurrentPage = 1;
         this.listsPerPage = 8; // Show 8 lead lists per page
         this.listsTotalPages = 1;
@@ -1120,12 +1118,10 @@ class LeadsManager {
             'No Answer',
             'Hang Up',
             'Voice Mail',
-            'No Service',
+            'Wrong Number',
             'Call Back Qualified',
             'Call Back NOT Qualified',
-            'deposited',
-            'active',
-            'inactive'
+            'deposited'
         ];
 
         let statusHtml = `
@@ -2381,12 +2377,6 @@ class LeadsManager {
                     break;
                 case 'deposited':
                     dropdown.classList.add('status-deposited');
-                    break;
-                case 'active':
-                    dropdown.classList.add('status-active');
-                    break;
-                case 'inactive':
-                    dropdown.classList.add('status-inactive');
                     break;
             }
         });

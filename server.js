@@ -760,9 +760,12 @@ app.get('/api/dashboard/stats', authenticate, async (req, res) => {
         const statusCounts = {
             new: 0,
             'No Answer': 0,
+            'Hang Up': 0,
             'Voice Mail': 0,
+            'Wrong Number': 0,
             'Call Back Qualified': 0,
-            'Call Back NOT Qualified': 0
+            'Call Back NOT Qualified': 0,
+            'deposited': 0
         };
 
         statusBreakdown.forEach(item => {
