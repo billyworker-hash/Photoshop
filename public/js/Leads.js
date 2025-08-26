@@ -1508,8 +1508,8 @@ class LeadsManager {
 
                 const handler = async () => {
 
-                    +                    // Trigger centralized filter application defined in setupLeadFilters
-                        +                    document.dispatchEvent(new CustomEvent('leads:apply-filters'));
+                    // Trigger centralized filter application defined in setupLeadFilters
+                    document.dispatchEvent(new CustomEvent('leads:apply-filters'));
                 };
 
                 newCb.addEventListener('change', handler);
