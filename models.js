@@ -78,7 +78,7 @@ leadListSchema.pre('save', function (next) {
 const leadSchema = new mongoose.Schema({
     status: {
         type: String,
-        enum: ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited'],
+        enum: ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Call Back NOT Qualified', 'Deposited'],
         default: 'new'
     },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -96,7 +96,7 @@ const leadSchema = new mongoose.Schema({
 const customerSchema = new mongoose.Schema({
     status: {
         type: String,
-        enum: ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'No Service', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'inactive'],
+        enum: ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'No Service', 'Call Back Qualified', 'Call Back NOT Qualified', 'Deposited', 'active', 'inactive'],
         default: 'new'
     },
     customFields: { type: Map, of: mongoose.Schema.Types.Mixed }, // Copy of lead's custom fields
@@ -126,8 +126,8 @@ const customerSchema = new mongoose.Schema({
 const depositorSchema = new mongoose.Schema({
     status: {
         type: String,
-        enum: ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'No Service', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'inactive'],
-        default: 'deposited'
+        enum: ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'No Service', 'Call Back Qualified', 'Call Back NOT Qualified', 'Deposited', 'active', 'inactive'],
+        default: 'Deposited'
     },
     customFields: { type: Map, of: mongoose.Schema.Types.Mixed }, // Copy of customer's custom fields
     agent: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // The agent who owns this depositor

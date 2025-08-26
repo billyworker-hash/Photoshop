@@ -20,7 +20,7 @@ class CustomerManager {
             'Wrong Number': 'status-wrong-number',
             'Call Back Qualified': 'status-call-back-qualified',
             'Call Back NOT Qualified': 'status-call-back-not-qualified',
-            'deposited': 'status-deposited'
+            'Deposited': 'status-Deposited'
         };
         const allStatusClasses = Object.values(statusClassMap);
 
@@ -282,7 +282,7 @@ class CustomerManager {
         const createdDate = formatDateDMY(customer.createdAt);
         rowHtml += `<td>${createdDate}</td>`;
         // Add Status dropdown
-        const statusOptions = ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited'];
+        const statusOptions = ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Call Back NOT Qualified', 'Deposited'];
         const currentStatus = customer.status || 'new';
         rowHtml += `
             <td>
@@ -707,7 +707,7 @@ class CustomerManager {
             const status = dropdown.value;
             // Remove existing status color classes
             dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail',
-                'status-call-back-qualified', 'status-call-back-not-qualified', 'status-hang-up', 'status-deposited', 'status-wrong-number');
+                'status-call-back-qualified', 'status-call-back-not-qualified', 'status-hang-up', 'status-Deposited', 'status-wrong-number');
 
             // Add class based on current status
             switch (status) {
@@ -732,8 +732,8 @@ class CustomerManager {
                 case 'Call Back NOT Qualified':
                     dropdown.classList.add('status-call-back-not-qualified');
                     break;
-                case 'deposited':
-                    dropdown.classList.add('status-deposited');
+                case 'Deposited':
+                    dropdown.classList.add('status-Deposited');
                     break;
             }
         });

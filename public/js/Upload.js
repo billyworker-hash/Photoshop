@@ -272,7 +272,7 @@ class UploadManager {
         if (statusCell) {
             const statusOptions = [
                 'new', 'No Answer', 'Voice Mail', 'Call Back Qualified',
-                'Call Back NOT Qualified', 'deposited', 'active', 'inactive'
+                'Call Back NOT Qualified', 'Deposited', 'active', 'inactive'
             ];
 
             statusCell.innerHTML = `
@@ -630,7 +630,7 @@ class UploadManager {
                 <option value="Voice Mail">Voice Mail</option>
                 <option value="Call Back Qualified">Call Back Qualified</option>
                 <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
-                <option value="deposited">Deposited</option>
+                <option value="Deposited">Deposited</option>
                 <option value="active">Active</option>
              
                 <option value="inactive">Inactive</option>

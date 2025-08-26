@@ -39,7 +39,7 @@
     color: #fff !important;
 }
 
-.status-deposited {
+.status-Deposited {
     background-color: #20c997 !important;
     color: #000 !important;
 }
@@ -125,12 +125,12 @@
     font-weight: bold;
 }
 
-.lead-status-dropdown option[value="deposited"],
-.lead-status-dropdown.status-deposited,
-.customer-status-dropdown option[value="deposited"],
-.customer-status-dropdown.status-deposited,
-.depositor-status-dropdown option[value="deposited"],
-.depositor-status-dropdown.status-deposited {
+.lead-status-dropdown option[value="Deposited"],
+.lead-status-dropdown.status-Deposited,
+.customer-status-dropdown option[value="Deposited"],
+.customer-status-dropdown.status-Deposited,
+.depositor-status-dropdown option[value="Deposited"],
+.depositor-status-dropdown.status-Deposited {
     color: #20c997 !important;
     font-weight: bold;
 }
@@ -292,6 +292,11 @@ html {
     }
 }
 
+/* Custom styles for CRM application */
+body {
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
 
 /* Sidebar Styles */
 .sidebar {
@@ -970,7 +975,7 @@ html {
     color: #dc3545;
 }
 
-.lead-status-dropdown option[value="deposited"] {
+.lead-status-dropdown option[value="Deposited"] {
     color: #20c997;
 }
 
@@ -1005,7 +1010,7 @@ html {
     color: #dc3545;
 }
 
-.lead-status-dropdown.status-deposited {
+.lead-status-dropdown.status-Deposited {
     color: #20c997;
 }
 
@@ -1142,7 +1147,7 @@ html {
     color: #dc3545;
 }
 
-.customer-status-dropdown option[value="deposited"] {
+.customer-status-dropdown option[value="Deposited"] {
     color: #20c997;
 }
 
@@ -1177,7 +1182,7 @@ html {
     color: #dc3545;
 }
 
-.customer-status-dropdown.status-deposited {
+.customer-status-dropdown.status-Deposited {
     color: #20c997;
 }
 
@@ -1321,7 +1326,7 @@ html {
     color: #dc3545;
 }
 
-.depositor-status-dropdown option[value="deposited"] {
+.depositor-status-dropdown option[value="Deposited"] {
     color: #20c997;
 }
 
@@ -1356,7 +1361,7 @@ html {
     color: #dc3545;
 }
 
-.depositor-status-dropdown.status-deposited {
+.depositor-status-dropdown.status-Deposited {
     color: #20c997;
 }
 

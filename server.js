@@ -758,162 +758,175 @@ app.post('/api/leads/:id/take-over', authenticate, async (req, res) => {
 });
 
 app.get('/api/dashboard/stats', authenticate, async (req, res) => {
-	try {
-		// Ensure we match ObjectId correctly when user is an agent
-		let filter = {};
-		if (req.user.role === 'agent') {
-			// If req.user.id is a valid ObjectId string, convert to ObjectId instance
-			if (mongoose.isValidObjectId(req.user.id)) {
-				filter = { assignedTo: new mongoose.Types.ObjectId(req.user.id) };
-			} else {
-				// fallback: use raw value (keeps prior behavior if id isn't an ObjectId string)
-				filter = { assignedTo: req.user.id };
-			}
-		} else {
-			filter = {};
-		}
+    try {
+        const ObjectId = mongoose.Types.ObjectId;
 
-		console.log(`[DASHBOARD STATS] User: ${req.user.username} | Role: ${req.user.role} | Using aggregation for efficient dashboard stats`);
+        // Build lead-level filter: admins see all, agents see assigned OR lists visible to them
+        let leadFilter = {};
+        if (req.user.role === 'agent') {
+            // ensure agent id is ObjectId when possible
+            const agentId = mongoose.isValidObjectId(req.user.id) ? new ObjectId(req.user.id) : req.user.id;
 
-		// Use aggregation to get total count efficiently
-		const totalCountResult = await Lead.aggregate([
-			{ $match: filter },
-			{ $count: "totalLeads" }
-		]);
-		const totalLeads = totalCountResult.length > 0 ? totalCountResult[0].totalLeads : 0;
+            // Find lead lists visible to this agent (active, not customer lists)
+            const visibleLists = await LeadList.find({
+                isActive: true,
+                isCustomerList: { $ne: true },
+                $or: [
+                    { isVisibleToUsers: true },
+                    { visibleToSpecificAgents: agentId }
+                ]
+            }).select('_id').lean();
 
-		// Use aggregation to get status breakdown efficiently
-		const statusBreakdown = await Lead.aggregate([
-			{ $match: filter },
-			{
-				$group: {
-					_id: "$status",
-					count: { $sum: 1 }
-				}
-			}
-		]);
+            const visibleListIds = visibleLists.map(l => l._id).filter(Boolean);
 
-		// Convert status breakdown to the expected format
-		const statusCounts = {
-			new: 0,
-			'No Answer': 0,
-			'Hang Up': 0,
-			'Voice Mail': 0,
-			'Wrong Number': 0,
-			'Call Back Qualified': 0,
-			'Call Back NOT Qualified': 0,
-			'deposited': 0
-		};
+            if (visibleListIds.length > 0) {
+                leadFilter = {
+                    $or: [
+                        { assignedTo: agentId },
+                        { leadList: { $in: visibleListIds } }
+                    ]
+                };
+            } else {
+                // No visible lists -> only assigned leads
+                leadFilter = { assignedTo: agentId };
+            }
+        } else {
+            leadFilter = {};
+        }
 
-		statusBreakdown.forEach(item => {
-			if (statusCounts.hasOwnProperty(item._id)) {
-				statusCounts[item._id] = item.count;
-			}
-		});
+        console.log(`[DASHBOARD STATS] User: ${req.user.username || req.user.name || req.user.email} | Role: ${req.user.role} | Using aggregation for efficient dashboard stats`);
 
-		// Get monthly trends using aggregation
-		const now = new Date();
-		const sixMonthsAgo = new Date();
-		sixMonthsAgo.setMonth(now.getMonth() - 5);
+        // Total leads
+        const totalCountResult = await Lead.aggregate([
+            { $match: leadFilter },
+            { $count: "totalLeads" }
+        ]).allowDiskUse(true);
+        const totalLeads = totalCountResult.length > 0 ? totalCountResult[0].totalLeads : 0;
 
-		const monthlyTrends = await Lead.aggregate([
-			{
-				$match: {
-					...filter,
-					createdAt: { $gte: sixMonthsAgo }
-				}
-			},
-			{
-				$group: {
-					_id: {
-						year: { $year: "$createdAt" },
-						month: { $month: "$createdAt" }
-					},
-					count: { $sum: 1 }
-				}
-			},
-			{ $sort: { "_id.year": 1, "_id.month": 1 } }
-		]);
+        // Status breakdown
+        const statusBreakdownAgg = await Lead.aggregate([
+            { $match: leadFilter },
+            {
+                $group: {
+                    _id: "$status",
+                    count: { $sum: 1 }
+                }
+            }
+        ]).allowDiskUse(true);
 
-		console.log(`[DASHBOARD STATS] User: ${req.user.username} | Total: ${totalLeads} leads | Efficient aggregation used`);
+        const statusCounts = {
+            new: 0,
+            'No Answer': 0,
+            'Hang Up': 0,
+            'Voice Mail': 0,
+            'Wrong Number': 0,
+            'Call Back Qualified': 0,
+            'Call Back NOT Qualified': 0,
+            'Deposited': 0
+        };
+        statusBreakdownAgg.forEach(item => {
+            if (statusCounts.hasOwnProperty(item._id)) {
+                statusCounts[item._id] = item.count;
+            }
+        });
 
-		// --- New: compute customers and depositors counts grouped by agent ---
-		try {
-			const ObjectId = mongoose.Types.ObjectId;
-			// Build agent match for agents (restrict to self) or empty for admins
-			const agentMatchForAgents = req.user.role === 'agent' && mongoose.isValidObjectId(req.user.id)
-				? { agent: new ObjectId(req.user.id) }
-				: {};
+        // Monthly trends (last 6 months)
+        const now = new Date();
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(now.getMonth() - 5);
 
-			// Customers by agent
-			const customersAgg = await Customer.aggregate([
-				{ $match: agentMatchForAgents },
-				{ $group: { _id: '$agent', count: { $sum: 1 } } },
-				{
-					$lookup: {
-						from: 'users',
-						localField: '_id',
-						foreignField: '_id',
-						as: 'agent'
-					}
-				},
-				{ $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
-				{
-					$project: {
-						_id: 0,
-						agentId: { $cond: [{ $ifNull: ['$_id', false] }, '$_id', null] },
-						agentName: { $ifNull: ['$agent.name', 'Unassigned'] },
-						count: 1
-					}
-				}
-			]).allowDiskUse(true);
+        const monthlyTrends = await Lead.aggregate([
+            {
+                $match: {
+                    ...leadFilter,
+                    createdAt: { $gte: sixMonthsAgo }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        year: { $year: "$createdAt" },
+                        month: { $month: "$createdAt" }
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { "_id.year": 1, "_id.month": 1 } }
+        ]).allowDiskUse(true);
 
-			// Depositors by agent
-			const depositorsAgg = await Depositor.aggregate([
-				{ $match: agentMatchForAgents },
-				{ $group: { _id: '$agent', count: { $sum: 1 } } },
-				{
-					$lookup: {
-						from: 'users',
-						localField: '_id',
-						foreignField: '_id',
-						as: 'agent'
-					}
-				},
-				{ $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
-				{
-					$project: {
-						_id: 0,
-						agentId: { $cond: [{ $ifNull: ['$_id', false] }, '$_id', null] },
-						agentName: { $ifNull: ['$agent.name', 'Unassigned'] },
-						count: 1
-					}
-				}
-			]).allowDiskUse(true);
+        console.log(`[DASHBOARD STATS] User: ${req.user.username || req.user.name || req.user.email} | Total: ${totalLeads} leads | Aggregations complete`);
 
-			// Attach to response
-			res.json({
-				totalLeads,
-				statusBreakdown: statusCounts,
-				monthlyTrends,
-				customersByAgent: customersAgg,
-				depositorsByAgent: depositorsAgg
-			});
-			return;
-		} catch (aggErr) {
-			console.error('Error computing agents aggregation for dashboard:', aggErr);
-			// fallthrough to original response if something goes wrong
-		}
+        // Customers / depositors by agent (unchanged behavior)
+        try {
+            const agentMatchForAgents = req.user.role === 'agent' && mongoose.isValidObjectId(req.user.id)
+                ? { agent: new ObjectId(req.user.id) }
+                : {};
 
-		res.json({
-			totalLeads,
-			statusBreakdown: statusCounts,
-			monthlyTrends
-		});
-	} catch (err) {
-		console.error('Dashboard stats error:', err);
-		res.status(500).json({ message: 'Error fetching dashboard statistics' });
-	}
+            const customersAgg = await Customer.aggregate([
+                { $match: agentMatchForAgents },
+                { $group: { _id: '$agent', count: { $sum: 1 } } },
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: '_id',
+                        foreignField: '_id',
+                        as: 'agent'
+                    }
+                },
+                { $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
+                {
+                    $project: {
+                        _id: 0,
+                        agentId: { $cond: [{ $ifNull: ['$_id', false] }, '$_id', null] },
+                        agentName: { $ifNull: ['$agent.name', 'Unassigned'] },
+                        count: 1
+                    }
+                }
+            ]).allowDiskUse(true);
+
+            const depositorsAgg = await Depositor.aggregate([
+                { $match: agentMatchForAgents },
+                { $group: { _id: '$agent', count: { $sum: 1 } } },
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: '_id',
+                        foreignField: '_id',
+                        as: 'agent'
+                    }
+                },
+                { $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
+                {
+                    $project: {
+                        _id: 0,
+                        agentId: { $cond: [{ $ifNull: ['$_id', false] }, '$_id', null] },
+                        agentName: { $ifNull: ['$agent.name', 'Unassigned'] },
+                        count: 1
+                    }
+                }
+            ]).allowDiskUse(true);
+
+            res.json({
+                totalLeads,
+                statusBreakdown: statusCounts,
+                monthlyTrends,
+                customersByAgent: customersAgg,
+                depositorsByAgent: depositorsAgg
+            });
+            return;
+        } catch (aggErr) {
+            console.error('Error computing agents aggregation for dashboard:', aggErr);
+        }
+
+        res.json({
+            totalLeads,
+            statusBreakdown: statusCounts,
+            monthlyTrends
+        });
+    } catch (err) {
+        console.error('Dashboard stats error:', err);
+        res.status(500).json({ message: 'Error fetching dashboard statistics' });
+    }
 });
 
 // User Management Routes (Admin only)
@@ -1819,7 +1832,7 @@ app.patch('/api/depositors/:id/status', authenticate, async (req, res) => {
         if (!status) {
             return res.status(400).json({ message: 'Status is required' });
         }
-        const validStatuses = ['new', 'No Answer', 'Hang Up', 'No Service', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited', 'active', 'inactive'];
+        const validStatuses = ['new', 'No Answer', 'Hang Up', 'No Service', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'Deposited', 'active', 'inactive'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ message: 'Invalid status' });
         }

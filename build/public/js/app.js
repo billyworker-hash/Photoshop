@@ -9,27 +9,59 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     function showInactivityLogoutModal() {
+        // Mark that the user was logged out for inactivity so a refresh cannot bypass it
+        try { localStorage.setItem('inactivityLoggedOut', '1'); } catch (e) { /* ignore */ }
+
+        // Clear any client-side auth state (best-effort)
+        try {
+            if (window.apiManager && typeof window.apiManager.clearToken === 'function') {
+                window.apiManager.clearToken();
+            }
+        } catch (e) { /* ignore */ }
+        try { localStorage.removeItem('authToken'); sessionStorage.removeItem('authToken'); } catch (e) { /* ignore */ }
+
+        // Stop the inactivity timer so we don't re-trigger while modal is shown
+        try { clearTimeout(inactivityTimeout); } catch (e) { /* ignore */ }
+
         const modalEl = document.getElementById('inactivityLogoutModal');
-        if (!modalEl) {
-            handleLogout();
+        if (modalEl) {
+            // Set a clear message in the modal body (fallback if specific element missing)
+            const bodyEl = modalEl.querySelector('.modal-body') || modalEl;
+            if (bodyEl) {
+                bodyEl.textContent = "You've been logged out due to inactivity. Please log in again.";
+            }
+
+            // Hide any standard dismiss controls so user must acknowledge
+            modalEl.querySelectorAll('[data-bs-dismiss], .btn-close').forEach(btn => btn.style.display = 'none');
+
+            // Wire OK / Login button to go to the login page
+            const okBtn = document.getElementById('inactivity-logout-ok-btn');
+            if (okBtn) {
+                okBtn.textContent = 'Go to Login';
+                okBtn.onclick = (e) => {
+                    e?.preventDefault?.();
+                    // Clear the inactivity flag only when user explicitly navigates to login (or after a successful login)
+                    try { localStorage.removeItem('inactivityLoggedOut'); } catch (err) { /* ignore */ }
+                    window.location.href = '/login';
+                };
+                okBtn.style.display = 'inline-block';
+            }
+
+            const modal = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: false });
+            modal.show();
             return;
         }
-        const modal = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: false });
-        modal.show();
 
-        // When user clicks OK, proceed to logout
-        const okBtn = document.getElementById('inactivity-logout-ok-btn');
-        if (okBtn) {
-            okBtn.onclick = () => {
-                modal.hide();
-                handleLogout();
-            };
-        }
+        // Fallback when modal isn't available: show an alert then redirect
+        try {
+            alert("You've been logged out due to inactivity. You will be redirected to the login page.");
+        } catch (e) { /* ignore */ }
+        window.location.href = '/login';
     }
 
     // --- Inactivity auto-logout ---
     let inactivityTimeout;
-    const INACTIVITY_LIMIT_MS = 30 * 60 * 1000; // 30 minutes (change to 5000 for testing)
+    const INACTIVITY_LIMIT_MS = 60 * 1000 * 30; // 30 minutes (change to 5000 for testing)
 
     function resetInactivityTimer() {
         clearTimeout(inactivityTimeout);

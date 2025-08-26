@@ -244,7 +244,7 @@ class DepositorManager {
         const createdDate = new Date(depositor.createdAt).toLocaleDateString();
         rowHtml += `<td>${createdDate}</td>`;
         // Add Status
-        const statusOptions = ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Call Back NOT Qualified', 'deposited'];
+        const statusOptions = ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Call Back NOT Qualified', 'Deposited'];
         const currentStatus = depositor.status || 'new';
         rowHtml += `
             <td>
@@ -785,7 +785,7 @@ class DepositorManager {
             const status = dropdown.value;
             // Remove existing status color classes
             dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail',
-                'status-call-back-qualified', 'status-call-back-not-qualified', 'status-hang-up', 'status-deposited', 'status-wrong-number');
+                'status-call-back-qualified', 'status-call-back-not-qualified', 'status-hang-up', 'status-Deposited', 'status-wrong-number');
 
             // Add class based on current status
             switch (status) {
@@ -810,8 +810,8 @@ class DepositorManager {
                 case 'Call Back NOT Qualified':
                     dropdown.classList.add('status-call-back-not-qualified');
                     break;
-                case 'deposited':
-                    dropdown.classList.add('status-deposited');
+                case 'Deposited':
+                    dropdown.classList.add('status-Deposited');
                     break;
             }
         });

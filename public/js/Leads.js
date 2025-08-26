@@ -11,7 +11,7 @@ class LeadsManager {
             'Wrong Number': 'status-wrong-number',
             'Call Back Qualified': 'status-call-back-qualified',
             'Call Back NOT Qualified': 'status-call-back-not-qualified',
-            'deposited': 'status-deposited'
+            'Deposited': 'status-Deposited'
         };
         const allStatusClasses = Object.values(statusClassMap);
 
@@ -1202,7 +1202,7 @@ class LeadsManager {
             'Wrong Number',
             'Call Back Qualified',
             'Call Back NOT Qualified',
-            'deposited'
+            'Deposited'
         ];
 
         let statusHtml = `
@@ -1772,16 +1772,21 @@ class LeadsManager {
         }
 
         // --- Add "Create Meeting" button below notes section ---
-        if (leadNotesContainer && !document.getElementById('create-meeting-btn')) {
-            const createMeetingBtn = document.createElement('button');
-            createMeetingBtn.type = 'button';
-            createMeetingBtn.className = 'btn btn-outline-success mt-2';
-            createMeetingBtn.id = 'create-meeting-btn';
-            createMeetingBtn.innerHTML = '<i class="bi bi-calendar-plus me-1"></i> Create Meeting';
-            leadNotesContainer.parentNode.appendChild(createMeetingBtn);
+        if (leadNotesContainer) {
+            // Ensure button exists (create once), but ALWAYS re-assign its click handler for the current lead.
+            let createMeetingBtn = document.getElementById('create-meeting-btn');
+            if (!createMeetingBtn) {
+                createMeetingBtn = document.createElement('button');
+                createMeetingBtn.type = 'button';
+                createMeetingBtn.className = 'btn btn-outline-success mt-2';
+                createMeetingBtn.id = 'create-meeting-btn';
+                createMeetingBtn.innerHTML = '<i class="bi bi-calendar-plus me-1"></i> Create Meeting';
+                leadNotesContainer.parentNode.appendChild(createMeetingBtn);
+            }
 
+            // Always (re)assign handler so it captures the current lead
             createMeetingBtn.onclick = () => {
-                // Use same logic as Lead Notes modal for lead name
+                // Compute friendly lead name
                 const firstName = lead.customFields?.firstName || lead.customFields?.['First Name'] || '';
                 const lastName = lead.customFields?.lastName || lead.customFields?.['Last Name'] || '';
                 let leadName = `${firstName} ${lastName}`.trim();
@@ -1789,7 +1794,7 @@ class LeadsManager {
                     leadName = lead.customFields?.fullName || lead.customFields?.['Full Name'] || '';
                 }
 
-                // Show meeting modal
+                // Create modal if needed (modal contents use stable IDs so we can update them)
                 let modal = document.getElementById('leadMeetingModal');
                 if (!modal) {
                     modal = document.createElement('div');
@@ -1807,7 +1812,7 @@ class LeadsManager {
                 <form id="lead-meeting-form">
                     <div class="mb-3">
                         <label class="form-label">Lead Name</label>
-                        <input type="text" class="form-control" value="${leadName}" readonly>
+                        <input type="text" class="form-control" id="lead-meeting-leadname" value="" readonly>
                     </div>
                     <div class="mb-3">
                         <label for="lead-meeting-title" class="form-label">Title</label>
@@ -1836,45 +1841,55 @@ class LeadsManager {
 `;
                     document.body.appendChild(modal);
                 }
+
+                // Update lead name input so modal always shows current lead
+                const leadNameInput = document.getElementById('lead-meeting-leadname');
+                if (leadNameInput) leadNameInput.value = leadName || '';
+
                 // Reset form fields
-                document.getElementById('lead-meeting-title').value = '';
-                document.getElementById('lead-meeting-date').value = '';
-                document.getElementById('lead-meeting-time').value = '';
-                document.getElementById('lead-meeting-desc').value = '';
+                const titleEl = document.getElementById('lead-meeting-title');
+                const dateEl = document.getElementById('lead-meeting-date');
+                const timeEl = document.getElementById('lead-meeting-time');
+                const descEl = document.getElementById('lead-meeting-desc');
+                if (titleEl) titleEl.value = '';
+                if (dateEl) dateEl.value = '';
+                if (timeEl) timeEl.value = '';
+                if (descEl) descEl.value = '';
 
                 // Show modal
                 const bsModal = new bootstrap.Modal(modal);
                 bsModal.show();
 
-                // Save handler
-                document.getElementById('save-lead-meeting-btn').onclick = async () => {
-                    const title = document.getElementById('lead-meeting-title').value.trim();
-                    const date = document.getElementById('lead-meeting-date').value;
-                    const time = document.getElementById('lead-meeting-time').value;
-                    const desc = document.getElementById('lead-meeting-desc').value.trim();
-                    if (!title || !date) return;
+                // (Re)assign save handler to use the current lead
+                const saveBtn = document.getElementById('save-lead-meeting-btn');
+                if (saveBtn) {
+                    saveBtn.onclick = async () => {
+                        const title = document.getElementById('lead-meeting-title').value.trim();
+                        const date = document.getElementById('lead-meeting-date').value;
+                        const time = document.getElementById('lead-meeting-time').value;
+                        const desc = document.getElementById('lead-meeting-desc').value.trim();
+                        if (!title || !date) return;
 
-                    // Save to backend via calendarManager
-                    const appt = {
-                        title,
-                        date,
-                        time,
-                        notes: desc,
-                        module: 'Lead',
-                        leadId: lead._id, // Link to this lead
-                        leadFullName: leadName // Use the same logic for full name
+                        const appt = {
+                            title,
+                            date,
+                            time,
+                            notes: desc,
+                            module: 'Lead',
+                            leadId: lead._id,
+                            leadFullName: leadName
+                        };
+                        try {
+                            await window.calendarManager.saveAppointment(appt);
+                            this.apiManager.showAlert('Meeting created!', 'success');
+                            bsModal.hide();
+                            // Refresh meetings for the current lead
+                            this.renderMeetingsForLead(lead);
+                        } catch (err) {
+                            this.apiManager.showAlert('Failed to create meeting: ' + err.message, 'danger');
+                        }
                     };
-                    try {
-                        await window.calendarManager.saveAppointment(appt);
-                        this.apiManager.showAlert('Meeting created!', 'success');
-                        bsModal.hide();
-
-                        // --- NEW: Refresh meetings list in the modal ---
-                        this.renderMeetingsForLead(lead);
-                    } catch (err) {
-                        this.apiManager.showAlert('Failed to create meeting: ' + err.message, 'danger');
-                    }
-                };
+                }
             };
         }
 
@@ -2663,8 +2678,8 @@ class LeadsManager {
                 case 'Call Back NOT Qualified':
                     dropdown.classList.add('status-call-back-not-qualified');
                     break;
-                case 'deposited':
-                    dropdown.classList.add('status-deposited');
+                case 'Deposited':
+                    dropdown.classList.add('status-Deposited');
                     break;
             }
         });
