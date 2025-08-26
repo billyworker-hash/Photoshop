@@ -170,43 +170,58 @@ app.post('/api/login', async (req, res) => {
 // Lead CRUD
 app.get('/api/leads', authenticate, async (req, res) => {
     try {
-        // Both admin and agent can see all leads, but only admin can upload/create
+        // Pagination params
+        const page = parseInt(req.query.page, 10) || 1;
+        const limit = parseInt(req.query.limit, 10) || 10;
+        const skip = (page - 1) * limit;
+
+        // Base filter (may get leadList populated below)
         const filter = {};
-        // Add leadList filter if provided
+
+        // --- leadList handling (preserve existing behavior) ---
         if (req.query.leadList) {
+            // client requested a specific list
+            if (!mongoose.isValidObjectId(req.query.leadList)) {
+                return res.status(400).json({ message: 'Invalid leadList id' });
+            }
             filter.leadList = req.query.leadList;
         } else {
-            // If no specific leadList is requested, only show leads from active lead lists
-            // but exclude customer lists (owned leads)
+            // no list requested: include only active lists (and visibility rules)
             let leadListFilter = {
                 isActive: true,
                 isCustomerList: { $ne: true }
             };
-            // For non-admin users, only include lists that are visible
+
             if (req.user.role !== 'admin') {
                 leadListFilter.$or = [
                     { isVisibleToUsers: true },
                     { visibleToSpecificAgents: req.user.id }
                 ];
             }
+
             const activeLeadLists = await LeadList.find(leadListFilter).select('_id');
             const activeListIds = activeLeadLists.map(list => list._id);
-            // Include leads from active lists and exclude orphaned leads (null/undefined leadList)
             filter.leadList = { $in: activeListIds };
         }
 
-        // Add query filters if provided
-        if (req.query.status) filter.status = req.query.status;
+        // Build additional clauses to combine safely
+        const andClauses = [];
 
-        // --- UPDATED SEARCH LOGIC: search all fields including customFields ---
-        if (req.query.search) {
-            const search = req.query.search;
+        // Status filter
+        if (req.query.status && req.query.status !== 'all') {
+            andClauses.push({ status: req.query.status });
+        }
+
+        // Search across common fields + customFields values (keeps your $expr approach)
+        if (req.query.search && String(req.query.search).trim()) {
+            const search = String(req.query.search).trim();
             const searchRegex = new RegExp(search, 'i');
-            filter.$or = [
+
+            const searchOr = [
                 { fullName: searchRegex },
                 { email: searchRegex },
                 { phone: searchRegex },
-                // Search any custom field value (works for Map fields in Mongoose >= 5.1)
+                // Search any custom field value
                 {
                     $expr: {
                         $gt: [
@@ -224,69 +239,79 @@ app.get('/api/leads', authenticate, async (req, res) => {
                     }
                 }
             ];
+
+            andClauses.push({ $or: searchOr });
         }
-        // --- END UPDATED SEARCH LOGIC ---
 
-        // Pagination parameters
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const skip = (page - 1) * limit;
+        // Country filter: support ?country=A&country=B or country=[...]
+        if (req.query.country) {
+            const countries = Array.isArray(req.query.country) ? req.query.country : [req.query.country];
+            const cleaned = countries.map(c => (c || '').toString().trim()).filter(Boolean);
+            if (cleaned.length) {
+                andClauses.push({
+                    $or: [
+                        { 'customFields.country': { $in: cleaned } },
+                        { 'customFields.Country': { $in: cleaned } }
+                    ]
+                });
+            }
+        }
 
-        // Get total count for pagination info
+        // If we collected andClauses, attach them to the main filter
+        if (andClauses.length) {
+            // If filter already contains an $and, merge; otherwise set $and
+            filter.$and = (filter.$and || []).concat(andClauses);
+        }
+
+        // Pagination + fetch
         const totalCount = await Lead.countDocuments(filter);
         const leads = await Lead.find(filter)
             .populate('assignedTo', 'name')
             .populate('notes.createdBy', 'name')
-            .sort({ _id: 1 }) // <-- Use _id for true insertion order
+            .sort({ _id: 1 })
             .skip(skip)
-            .limit(limit);
+            .limit(limit)
+            .lean();
 
-        // Get leadList name for logging (if specific list requested)
+        // Convert customFields Map -> plain object
+        const leadsResponse = leads.map(lead => {
+            if (lead.customFields && typeof lead.customFields === 'object') {
+                try {
+                    lead.customFields = Object.fromEntries(lead.customFields);
+                } catch (e) {
+                    // leave as-is if conversion fails
+                }
+            }
+            return lead;
+        });
+
+        // Log (preserve existing logging info)
         let leadListName = 'all_active';
         if (req.query.leadList) {
             try {
                 const leadListDoc = await LeadList.findById(req.query.leadList).select('name');
-                if (leadListDoc && leadListDoc.name) {
-                    leadListName = leadListDoc.name;
-                } else {
-                    leadListName = req.query.leadList; // fallback to ID if not found
-                }
+                leadListName = (leadListDoc && leadListDoc.name) ? leadListDoc.name : req.query.leadList;
             } catch (e) {
-                leadListName = req.query.leadList; // fallback to ID if error
+                leadListName = req.query.leadList;
             }
         }
-        // Log the fetch operation with user name and leadList name
-        let username = 'unknown';
-        if (req.user && req.user.name) {
-            username = req.user.name;
-        } else if (req.user && req.user.email) {
-            username = req.user.email;
-        }
+        const username = (req.user && (req.user.name || req.user.email)) || 'unknown';
         console.log(`[LEADS API] User: ${username} | Page: ${page} | Limit: ${limit} | Total Available: ${totalCount} | Fetched: ${leads.length} leads | Filters:`, {
             leadList: leadListName,
             search: req.query.search || 'none',
             status: req.query.status || 'all',
-            source: req.query.leadList ? 'upload_section' : 'leads_section'
+            country: req.query.country || null
         });
 
-        // Convert customFields Map to Object for each lead
-        const leadsResponse = leads.map(lead => {
-            const leadObj = lead.toObject();
-            if (leadObj.customFields) {
-                leadObj.customFields = Object.fromEntries(leadObj.customFields);
-            }
-            return leadObj;
-        });
-
-        // Send response with pagination metadata
+        // Response with pagination metadata
         res.json({
             leads: leadsResponse,
             pagination: {
                 currentPage: page,
-                totalPages: Math.ceil(totalCount / limit),
-                totalCount: totalCount,
-                limit: limit,
-                hasNext: page < Math.ceil(totalCount / limit),
+                totalPages: Math.max(1, Math.ceil(totalCount / limit)),
+                totalCount,
+                limit,
+                hasNext: page * limit < totalCount,
                 hasPrev: page > 1
             }
         });
@@ -733,82 +758,162 @@ app.post('/api/leads/:id/take-over', authenticate, async (req, res) => {
 });
 
 app.get('/api/dashboard/stats', authenticate, async (req, res) => {
-    try {
-        const filter = req.user.role === 'agent' ? { assignedTo: req.user.id } : {};
+	try {
+		// Ensure we match ObjectId correctly when user is an agent
+		let filter = {};
+		if (req.user.role === 'agent') {
+			// If req.user.id is a valid ObjectId string, convert to ObjectId instance
+			if (mongoose.isValidObjectId(req.user.id)) {
+				filter = { assignedTo: new mongoose.Types.ObjectId(req.user.id) };
+			} else {
+				// fallback: use raw value (keeps prior behavior if id isn't an ObjectId string)
+				filter = { assignedTo: req.user.id };
+			}
+		} else {
+			filter = {};
+		}
 
-        console.log(`[DASHBOARD STATS] User: ${req.user.username} | Role: ${req.user.role} | Using aggregation for efficient dashboard stats`);
+		console.log(`[DASHBOARD STATS] User: ${req.user.username} | Role: ${req.user.role} | Using aggregation for efficient dashboard stats`);
 
-        // Use aggregation to get total count efficiently
-        const totalCountResult = await Lead.aggregate([
-            { $match: filter },
-            { $count: "totalLeads" }
-        ]);
-        const totalLeads = totalCountResult.length > 0 ? totalCountResult[0].totalLeads : 0;
+		// Use aggregation to get total count efficiently
+		const totalCountResult = await Lead.aggregate([
+			{ $match: filter },
+			{ $count: "totalLeads" }
+		]);
+		const totalLeads = totalCountResult.length > 0 ? totalCountResult[0].totalLeads : 0;
 
-        // Use aggregation to get status breakdown efficiently
-        const statusBreakdown = await Lead.aggregate([
-            { $match: filter },
-            {
-                $group: {
-                    _id: "$status",
-                    count: { $sum: 1 }
-                }
-            }
-        ]);
+		// Use aggregation to get status breakdown efficiently
+		const statusBreakdown = await Lead.aggregate([
+			{ $match: filter },
+			{
+				$group: {
+					_id: "$status",
+					count: { $sum: 1 }
+				}
+			}
+		]);
 
-        // Convert status breakdown to the expected format
-        const statusCounts = {
-            new: 0,
-            'No Answer': 0,
-            'Hang Up': 0,
-            'Voice Mail': 0,
-            'Wrong Number': 0,
-            'Call Back Qualified': 0,
-            'Call Back NOT Qualified': 0,
-            'deposited': 0
-        };
+		// Convert status breakdown to the expected format
+		const statusCounts = {
+			new: 0,
+			'No Answer': 0,
+			'Hang Up': 0,
+			'Voice Mail': 0,
+			'Wrong Number': 0,
+			'Call Back Qualified': 0,
+			'Call Back NOT Qualified': 0,
+			'deposited': 0
+		};
 
-        statusBreakdown.forEach(item => {
-            if (statusCounts.hasOwnProperty(item._id)) {
-                statusCounts[item._id] = item.count;
-            }
-        });
+		statusBreakdown.forEach(item => {
+			if (statusCounts.hasOwnProperty(item._id)) {
+				statusCounts[item._id] = item.count;
+			}
+		});
 
-        // Get monthly trends using aggregation
-        const now = new Date();
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(now.getMonth() - 5);
+		// Get monthly trends using aggregation
+		const now = new Date();
+		const sixMonthsAgo = new Date();
+		sixMonthsAgo.setMonth(now.getMonth() - 5);
 
-        const monthlyTrends = await Lead.aggregate([
-            {
-                $match: {
-                    ...filter,
-                    createdAt: { $gte: sixMonthsAgo }
-                }
-            },
-            {
-                $group: {
-                    _id: {
-                        year: { $year: "$createdAt" },
-                        month: { $month: "$createdAt" }
-                    },
-                    count: { $sum: 1 }
-                }
-            },
-            { $sort: { "_id.year": 1, "_id.month": 1 } }
-        ]);
+		const monthlyTrends = await Lead.aggregate([
+			{
+				$match: {
+					...filter,
+					createdAt: { $gte: sixMonthsAgo }
+				}
+			},
+			{
+				$group: {
+					_id: {
+						year: { $year: "$createdAt" },
+						month: { $month: "$createdAt" }
+					},
+					count: { $sum: 1 }
+				}
+			},
+			{ $sort: { "_id.year": 1, "_id.month": 1 } }
+		]);
 
-        console.log(`[DASHBOARD STATS] User: ${req.user.username} | Total: ${totalLeads} leads | Efficient aggregation used`);
+		console.log(`[DASHBOARD STATS] User: ${req.user.username} | Total: ${totalLeads} leads | Efficient aggregation used`);
 
-        res.json({
-            totalLeads,
-            statusBreakdown: statusCounts,
-            monthlyTrends
-        });
-    } catch (err) {
-        console.error('Dashboard stats error:', err);
-        res.status(500).json({ message: 'Error fetching dashboard statistics' });
-    }
+		// --- New: compute customers and depositors counts grouped by agent ---
+		try {
+			const ObjectId = mongoose.Types.ObjectId;
+			// Build agent match for agents (restrict to self) or empty for admins
+			const agentMatchForAgents = req.user.role === 'agent' && mongoose.isValidObjectId(req.user.id)
+				? { agent: new ObjectId(req.user.id) }
+				: {};
+
+			// Customers by agent
+			const customersAgg = await Customer.aggregate([
+				{ $match: agentMatchForAgents },
+				{ $group: { _id: '$agent', count: { $sum: 1 } } },
+				{
+					$lookup: {
+						from: 'users',
+						localField: '_id',
+						foreignField: '_id',
+						as: 'agent'
+					}
+				},
+				{ $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
+				{
+					$project: {
+						_id: 0,
+						agentId: { $cond: [{ $ifNull: ['$_id', false] }, '$_id', null] },
+						agentName: { $ifNull: ['$agent.name', 'Unassigned'] },
+						count: 1
+					}
+				}
+			]).allowDiskUse(true);
+
+			// Depositors by agent
+			const depositorsAgg = await Depositor.aggregate([
+				{ $match: agentMatchForAgents },
+				{ $group: { _id: '$agent', count: { $sum: 1 } } },
+				{
+					$lookup: {
+						from: 'users',
+						localField: '_id',
+						foreignField: '_id',
+						as: 'agent'
+					}
+				},
+				{ $unwind: { path: '$agent', preserveNullAndEmptyArrays: true } },
+				{
+					$project: {
+						_id: 0,
+						agentId: { $cond: [{ $ifNull: ['$_id', false] }, '$_id', null] },
+						agentName: { $ifNull: ['$agent.name', 'Unassigned'] },
+						count: 1
+					}
+				}
+			]).allowDiskUse(true);
+
+			// Attach to response
+			res.json({
+				totalLeads,
+				statusBreakdown: statusCounts,
+				monthlyTrends,
+				customersByAgent: customersAgg,
+				depositorsByAgent: depositorsAgg
+			});
+			return;
+		} catch (aggErr) {
+			console.error('Error computing agents aggregation for dashboard:', aggErr);
+			// fallthrough to original response if something goes wrong
+		}
+
+		res.json({
+			totalLeads,
+			statusBreakdown: statusCounts,
+			monthlyTrends
+		});
+	} catch (err) {
+		console.error('Dashboard stats error:', err);
+		res.status(500).json({ message: 'Error fetching dashboard statistics' });
+	}
 });
 
 // User Management Routes (Admin only)
@@ -1314,7 +1419,6 @@ app.post('/api/customers/:id/notes', authenticate, async (req, res) => {
             if (!customer.notes) {
                 customer.notes = [];
             }
-
             // Add the note with current timestamp
             const newNote = {
                 content: note.content,
@@ -2105,6 +2209,57 @@ app.get('/api/leads/counts', authenticate, async (req, res) => {
 
 
 
+// Get unique countries for a list (fast via aggregation)
+
+// Get unique countries for a list (fast via aggregation)
+app.get('/api/leads/countries', authenticate, async (req, res) => {
+    try {
+        const listId = req.query.listId;
+        console.log(`[API] GET /api/leads/countries listId=${listId} user=${req.user?.id || 'unknown'}`);
+        if (!listId) return res.status(400).json({ message: 'listId required' });
+
+        // Validate and construct ObjectId safely
+        if (!mongoose.isValidObjectId(listId)) {
+            console.warn('Invalid listId passed to /api/leads/countries:', listId);
+            return res.status(400).json({ message: 'Invalid listId' });
+        }
+        const listObjectId = new mongoose.Types.ObjectId(listId);
+
+        // Match that favors indexed fields: leadList + customFields.country / customFields.Country
+        const match = {
+            leadList: listObjectId,
+            $or: [
+                { 'customFields.country': { $exists: true, $ne: '' } },
+                { 'customFields.Country': { $exists: true, $ne: '' } }
+            ]
+        };
+
+        const pipeline = [
+            { $match: match }, // should be able to use the compound sparse indexes you created
+            {
+                $project: {
+                    country: { $ifNull: ['$customFields.country', '$customFields.Country'] }
+                }
+            },
+            { $match: { country: { $exists: true, $ne: null, $ne: '' } } },
+            { $group: { _id: '$country' } },
+            { $sort: { _id: 1 } },
+            { $project: { country: '$_id', _id: 0 } }
+        ];
+
+        const result = await Lead.aggregate(pipeline).allowDiskUse(true);
+        // result is array of { country: ... } - return strings
+        res.json(result.map(r => r.country));
+    } catch (err) {
+        console.error('Error fetching countries aggregation:', err);
+        res.status(500).json({ message: 'Failed to fetch countries' });
+    }
+});
+
+
+
+
+
 // Get all meetings for a specific lead (searches all users)
 app.get('/api/meetings/for-lead/:leadId', authenticate, async (req, res) => {
     try {
@@ -2145,13 +2300,13 @@ app.get('/api/meetings', authenticate, async (req, res) => {
 // Add a meeting for current user
 app.post('/api/meetings', authenticate, async (req, res) => {
     try {
-        const { title, date, time, notes, leadId, module } = req.body; // Add leadId and module
+        const { title, date, time, notes, leadId, module, leadFullName } = req.body; // <-- add leadFullName
         if (!title || !date) return res.status(400).json({ message: 'Title and date are required' });
 
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        user.meetings.push({ title, date, time, notes, leadId, module }); // Save leadId and module
+        user.meetings.push({ title, date, time, notes, leadId, module, leadFullName }); // <-- save leadFullName
         await user.save();
 
         res.status(201).json({ message: 'Meeting created' });

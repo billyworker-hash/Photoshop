@@ -177,24 +177,301 @@ class UploadManager {
         if (this.selectedList && this.selectedList.labels && this.selectedList.labels.length > 0) {
             this.selectedList.labels.forEach(label => {
                 const value = lead.customFields?.[label.name] || '-';
-                customFieldsCells += `<td>${value}</td>`;
+                customFieldsCells += `<td data-field="${label.name}">${value}</td>`;
             });
         }
 
         return `
-            <tr data-lead-id="${lead._id}">
-                ${customFieldsCells}
-                <td>
-                    <span>${lead.status}</span>
-                </td>
-                <td>
-                    <button class="btn btn-sm btn-outline-danger" onclick="window.uploadManager.removeLead('${lead._id}')" title="Remove lead">
+        <tr data-lead-id="${lead._id}">
+            ${customFieldsCells}
+            <td data-field="status">
+                <span>${lead.status}</span>
+            </td>
+            <td>
+                <div class="btn-group" role="group">
+                    <button class="btn btn-sm btn-outline-primary edit-lead-btn" 
+                            onclick="window.uploadManager.toggleEditLead('${lead._id}')" 
+                            title="Edit lead">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" 
+                            onclick="window.uploadManager.removeLead('${lead._id}')" 
+                            title="Remove lead">
                         <i class="bi bi-trash"></i>
                     </button>
-                </td>
-            </tr>
+                </div>
+            </td>
+        </tr>
+    `;
+    }
+
+    // Toggle edit mode for a lead row
+    toggleEditLead(leadId) {
+        const row = document.querySelector(`tr[data-lead-id="${leadId}"]`);
+        if (!row) return;
+
+        const editBtn = row.querySelector('.edit-lead-btn');
+        const isEditing = row.classList.contains('editing');
+
+        if (isEditing) {
+            // Save the changes
+            this.saveLeadChanges(leadId);
+        } else {
+            // Enter edit mode
+            this.enterEditMode(leadId);
+        }
+    }
+
+    // Enter edit mode for a lead
+    enterEditMode(leadId) {
+        const row = document.querySelector(`tr[data-lead-id="${leadId}"]`);
+        if (!row) return;
+
+        const lead = this.currentLeads.find(l => l._id === leadId);
+        if (!lead) return;
+
+        row.classList.add('editing');
+
+        // Convert custom field cells to editable inputs
+        if (this.selectedList && this.selectedList.labels) {
+            this.selectedList.labels.forEach(label => {
+                const cell = row.querySelector(`td[data-field="${label.name}"]`);
+                if (cell) {
+                    const currentValue = lead.customFields?.[label.name] || '';
+
+                    if (label.type === 'select' && label.options) {
+                        // Create select dropdown
+                        cell.innerHTML = `
+                        <select class="form-select form-select-sm edit-field" data-field="${label.name}">
+                            <option value="">Select ${label.label}</option>
+                            ${label.options.map(option =>
+                            `<option value="${option}" ${currentValue === option ? 'selected' : ''}>${option}</option>`
+                        ).join('')}
+                        </select>
+                    `;
+                    } else {
+                        // Create text input
+                        const inputType = label.type === 'email' ? 'email' :
+                            label.type === 'phone' ? 'tel' :
+                                label.type === 'number' ? 'number' : 'text';
+
+                        cell.innerHTML = `
+                        <input type="${inputType}" 
+                               class="form-control form-control-sm edit-field" 
+                               data-field="${label.name}" 
+                               value="${currentValue}" 
+                               placeholder="${label.label}">
+                    `;
+                    }
+                }
+            });
+        }
+
+        // Convert status cell to editable dropdown
+        const statusCell = row.querySelector('td[data-field="status"]');
+        if (statusCell) {
+            const statusOptions = [
+                'new', 'No Answer', 'Voice Mail', 'Call Back Qualified',
+                'Call Back NOT Qualified', 'deposited', 'active', 'inactive'
+            ];
+
+            statusCell.innerHTML = `
+            <select class="form-select form-select-sm edit-field" data-field="status">
+                ${statusOptions.map(option =>
+                `<option value="${option}" ${lead.status === option ? 'selected' : ''}>${option}</option>`
+            ).join('')}
+            </select>
         `;
-    }// Initialize modals
+        }
+
+        // Update edit button to save button
+        const editBtn = row.querySelector('.edit-lead-btn');
+        if (editBtn) {
+            editBtn.innerHTML = '<i class="bi bi-check"></i>';
+            editBtn.title = 'Save changes';
+            editBtn.classList.remove('btn-outline-primary');
+            editBtn.classList.add('btn-success');
+        }
+
+        // Add cancel button
+        const actionsCell = row.querySelector('td:last-child .btn-group');
+        if (actionsCell) {
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'btn btn-sm btn-outline-secondary cancel-edit-btn';
+            cancelBtn.innerHTML = '<i class="bi bi-x"></i>';
+            cancelBtn.title = 'Cancel editing';
+            cancelBtn.onclick = () => this.cancelEditLead(leadId);
+            actionsCell.insertBefore(cancelBtn, editBtn.nextSibling);
+        }
+    }
+
+    // Cancel edit mode
+    cancelEditLead(leadId) {
+        const row = document.querySelector(`tr[data-lead-id="${leadId}"]`);
+        if (!row) return;
+
+        const lead = this.currentLeads.find(l => l._id === leadId);
+        if (!lead) return;
+
+        row.classList.remove('editing');
+
+        // Restore original values in custom field cells
+        if (this.selectedList && this.selectedList.labels) {
+            this.selectedList.labels.forEach(label => {
+                const cell = row.querySelector(`td[data-field="${label.name}"]`);
+                if (cell) {
+                    const value = lead.customFields?.[label.name] || '-';
+                    cell.innerHTML = value;
+                }
+            });
+        }
+
+        // Restore status cell
+        const statusCell = row.querySelector('td[data-field="status"]');
+        if (statusCell) {
+            statusCell.innerHTML = `<span>${lead.status}</span>`;
+        }
+
+        // Restore edit button
+        const editBtn = row.querySelector('.edit-lead-btn');
+        if (editBtn) {
+            editBtn.innerHTML = '<i class="bi bi-pencil"></i>';
+            editBtn.title = 'Edit lead';
+            editBtn.classList.remove('btn-success');
+            editBtn.classList.add('btn-outline-primary');
+        }
+
+        // Remove cancel button
+        const cancelBtn = row.querySelector('.cancel-edit-btn');
+        if (cancelBtn) {
+            cancelBtn.remove();
+        }
+    }
+
+    // Save lead changes
+    async saveLeadChanges(leadId) {
+        const row = document.querySelector(`tr[data-lead-id="${leadId}"]`);
+        if (!row) return;
+
+        const lead = this.currentLeads.find(l => l._id === leadId);
+        if (!lead) return;
+
+        try {
+            // Collect updated values
+            const updatedData = {
+                customFields: { ...lead.customFields }
+            };
+
+            // Get custom field values
+            const editFields = row.querySelectorAll('.edit-field');
+            editFields.forEach(field => {
+                const fieldName = field.dataset.field;
+                const fieldValue = field.value.trim();
+
+                if (fieldName === 'status') {
+                    updatedData.status = fieldValue;
+                } else {
+                    updatedData.customFields[fieldName] = fieldValue;
+                }
+            });
+
+            // Update fullName if firstName or lastName changed
+            const firstName = updatedData.customFields.firstName || '';
+            const lastName = updatedData.customFields.lastName || '';
+            if (firstName || lastName) {
+                updatedData.fullName = `${firstName} ${lastName}`.trim();
+            }
+
+            // Send update to server
+            const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/leads/${leadId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(updatedData)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to update lead');
+            }
+
+            const updatedLead = await response.json();
+
+            // Update the lead in currentLeads array
+            const leadIndex = this.currentLeads.findIndex(l => l._id === leadId);
+            if (leadIndex !== -1) {
+                this.currentLeads[leadIndex] = { ...this.currentLeads[leadIndex], ...updatedLead };
+            }
+
+            // Exit edit mode and refresh the row display
+            row.classList.remove('editing');
+            this.refreshLeadRow(leadId);
+
+            this.showSuccess('Lead updated successfully');
+
+        } catch (error) {
+            console.error('Error updating lead:', error);
+            this.showError('Failed to update lead: ' + error.message);
+
+            // Cancel edit mode on error
+            this.cancelEditLead(leadId);
+        }
+    }
+
+    // Refresh a single lead row after update
+
+    refreshLeadRow(leadId) {
+        const row = document.querySelector(`tr[data-lead-id="${leadId}"]`);
+        if (!row) return;
+
+        const lead = this.currentLeads.find(l => l._id === leadId);
+        if (!lead) return;
+
+        // Remove editing class to ensure we're in display mode
+        row.classList.remove('editing');
+
+        // Instead of replacing innerHTML, we need to rebuild the row content properly
+        let customFieldsCells = '';
+
+        // Add list-specific label data
+        if (this.selectedList && this.selectedList.labels && this.selectedList.labels.length > 0) {
+            this.selectedList.labels.forEach(label => {
+                const value = lead.customFields?.[label.name] || '-';
+                customFieldsCells += `<td data-field="${label.name}">${value}</td>`;
+            });
+        }
+
+        // Build the complete row content
+        const rowContent = `
+        ${customFieldsCells}
+        <td data-field="status">
+            <span>${lead.status}</span>
+        </td>
+        <td>
+            <div class="btn-group" role="group">
+                <button class="btn btn-sm btn-outline-primary edit-lead-btn" 
+                        onclick="window.uploadManager.toggleEditLead('${lead._id}')" 
+                        title="Edit lead">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" 
+                        onclick="window.uploadManager.removeLead('${lead._id}')" 
+                        title="Remove lead">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </td>
+    `;
+
+        // Replace the row content
+        row.innerHTML = rowContent;
+
+        // Ensure the row maintains the correct data attribute
+        row.dataset.leadId = lead._id;
+    }
+
+
+    // Initialize modals
     initializeModals() {        // Create modals if they don't exist
         this.createCreateListModal();
         this.createBulkAddModal();
@@ -952,6 +1229,7 @@ class UploadManager {
             this.showError('Failed to delete lead list');
         }
     }    // Remove lead from list
+    // Remove lead from list
     async removeLead(leadId) {
         const confirmed = await window.confirmationModal.confirmDelete(
             'this lead',
@@ -967,17 +1245,49 @@ class UploadManager {
             await this.apiManager.delete(`/leads/${leadId}`);
             this.showSuccess('Lead removed successfully');
 
-            // Refresh the selected list
-            if (this.selectedListId) {
-                await this.loadSelectedListDetails(this.selectedListId);
-                await this.loadLeadLists(); // Refresh to update lead counts
+            // Instead of refreshing the entire list, just remove the lead from current view
+            // Remove from current leads array
+            this.currentLeads = this.currentLeads.filter(lead => lead._id !== leadId);
+
+            // Update total count
+            this.totalCount = Math.max(0, this.totalCount - 1);
+
+            // Recalculate total pages
+            this.totalPages = Math.ceil(this.totalCount / this.leadsPerPage);
+
+            // If current page is now empty and we're not on page 1, go to previous page
+            if (this.currentLeads.length === 0 && this.currentPage > 1) {
+                this.currentPage = this.currentPage - 1;
+                // Fetch leads for the new current page
+                const result = await this.fetchLeadsForList(
+                    this.selectedListId,
+                    this.currentPage,
+                    this.leadsPerPage,
+                    this.currentFilters
+                );
+                this.currentLeads = result.leads;
+                this.totalPages = result.pagination.totalPages;
+                this.totalCount = result.pagination.totalCount;
             }
+
+            // Remove the row from DOM
+            const row = document.querySelector(`tr[data-lead-id="${leadId}"]`);
+            if (row) {
+                row.remove();
+            }
+
+            // Update the display with current leads
+            this.displayLeadsWithPagination();
+
+            // Only refresh lead lists to update counts (this is lightweight)
+            await this.loadLeadLists();
 
         } catch (error) {
             console.error('Error removing lead:', error);
             this.showError('Failed to remove lead');
         }
-    }    // Toggle list visibility for admins
+    }
+    // Toggle list visibility for admins
     async toggleListVisibility(listId, currentVisibility) {
         try {
             const response = await this.apiManager.put(`/lead-lists/${listId}`, {
@@ -1894,9 +2204,9 @@ class UploadManager {
         if (!container) return;
         container.innerHTML = '';
         (this.selectedList.labels || []).forEach((label, idx) => {
-          const labelDiv = document.createElement('div');
-          labelDiv.className = 'mb-2 border rounded p-2 position-relative';
-          labelDiv.innerHTML = `
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'mb-2 border rounded p-2 position-relative';
+            labelDiv.innerHTML = `
               <div class="row g-2 align-items-center">
                   <div class="col-10">
                       <input type="text" class="form-control" name="label_name_${idx}" value="${label.name || ''}" placeholder="Field Name" required>
@@ -1906,16 +2216,16 @@ class UploadManager {
                   </div>
               </div>
           `;
-          container.appendChild(labelDiv);
-      });
-      container.querySelectorAll('.remove-label-btn').forEach(btn => {
-          btn.onclick = (e) => {
-              const idx = parseInt(btn.dataset.labelIdx);
-              this.selectedList.labels.splice(idx, 1);
-              this.renderEditCustomLabels();
-          };
-      });
-  }
+            container.appendChild(labelDiv);
+        });
+        container.querySelectorAll('.remove-label-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                const idx = parseInt(btn.dataset.labelIdx);
+                this.selectedList.labels.splice(idx, 1);
+                this.renderEditCustomLabels();
+            };
+        });
+    }
     addEditCustomLabel() {
         // Sync current UI values to this.selectedList.labels before adding new
         const container = document.getElementById('edit-custom-labels-container');
@@ -1925,9 +2235,9 @@ class UploadManager {
             rows.forEach((row, idx) => {
                 const name = row.querySelector(`input[name="label_name_${idx}"]`)?.value.trim() || '';
                 if (name) {
-                    updatedLabels.push({ name, label: name}); // Set label to be the same as name
+                    updatedLabels.push({ name, label: name }); // Set label to be the same as name
                 } else if (name) {
-                    updatedLabels.push({ name, label: name});
+                    updatedLabels.push({ name, label: name });
                 }
             });
             this.selectedList.labels = updatedLabels;

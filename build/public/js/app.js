@@ -606,15 +606,10 @@ async function deactivateAllUsers() {
 
 // Update UI with user information
 function updateUserInterface(currentUser) {
-    // Update sidebar user info
-    const userNameSidebar = document.getElementById('user-name-sidebar');
-    const userRoleSidebar = document.getElementById('user-role-sidebar');
-
-    if (userNameSidebar) {
-        userNameSidebar.textContent = currentUser.name;
-    }
-    if (userRoleSidebar) {
-        userRoleSidebar.textContent = currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
+    // Update sidebar greeting
+    const userGreetingSidebar = document.getElementById('user-greeting-sidebar');
+    if (userGreetingSidebar) {
+        userGreetingSidebar.textContent = `Welcome ${currentUser.name}`;
     }
 
     // Update dashboard greeting

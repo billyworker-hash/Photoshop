@@ -46,6 +46,8 @@ class LeadsManager {
         this.selectedListId = null;
         this.eventListeners = []; // Track event listeners for cleanup
         this.filterListenersSetup = false; // Track if filter listeners are already set up
+        // Guard used during state restore to avoid wiping restored UI
+        this.restoringLeadsState = false;
         // Auto-refresh properties
         this.autoRefreshInterval = null;
         this.autoRefreshEnabled = false;
@@ -61,7 +63,12 @@ class LeadsManager {
         this.currentLeads = []; // Current page leads from server
         this.currentFilters = {}; // Track current search/status filters
         // Sorting
-    }    // Load leads
+
+        // Cache countries per listId to avoid repeated full-list scans
+        this.countriesCache = {};
+    }
+
+    // Load leads
 
 
 
@@ -130,9 +137,13 @@ class LeadsManager {
             // Update lead list counts
             await this.updateLeadListCounts();
 
-            // Display lead list cards (this will auto-select first list if available)
-            // The auto-selection will trigger fetchLeads() and displayLeads() automatically
-            this.displayLeadListCards();
+            // Restore saved leads page state (selected list + filters) so countries are populated
+            // if the user had a previously selected list in localStorage.
+            await this.restoreLeadsPageState();
+
+            // Do NOT auto-select a list on initial load
+
+            this.displayLeadListCards(true);
 
             // Initialize custom fields in forms
             this.initializeCustomFields();
@@ -170,9 +181,13 @@ class LeadsManager {
 
     // Restore state (call when entering Leads page)
     async restoreLeadsPageState() {
+
+        this.restoringLeadsState = true;
         const stateStr = localStorage.getItem('leadsPageState');
         if (!stateStr) {
             // No saved state, just load as usual
+            await this.refreshCurrentView();
+            this.restoringLeadsState = false;
             await this.refreshCurrentView();
             return;
         }
@@ -181,8 +196,35 @@ class LeadsManager {
             if (state.selectedListId) this.selectedListId = state.selectedListId;
             if (state.currentPage) this.currentPage = state.currentPage;
             if (state.currentFilters) this.currentFilters = state.currentFilters;
+
+            // Ensure country container exists (setup may not have run yet during full reload)
+            let wrapper = document.getElementById('lead-country-filter-container');
+            if (!wrapper) {
+                const dropdownMenu = document.querySelector('#lead-country-filter-col .dropdown-menu');
+                if (dropdownMenu) {
+                    wrapper = document.createElement('div');
+                    wrapper.id = 'lead-country-filter-container';
+                    // keep same inline scrolling behaviour used elsewhere
+                    wrapper.style.maxHeight = '240px';
+                    wrapper.style.overflowY = 'auto';
+                    // insert at top of dropdown menu so Clear/Apply remain after it
+                    dropdownMenu.insertBefore(wrapper, dropdownMenu.firstChild);
+                }
+            }
+
+            // Populate countries for the saved/selected list so the Countries filter is ready
+            if (this.selectedListId && wrapper) {
+                try {
+                    await this.populateCountryChecklistFromListId(this.selectedListId);
+                } catch (err) {
+                    console.warn('populateCountryChecklistFromListId failed during restore:', err);
+                }
+            }
+
             await this.refreshCurrentView();
+            this.restoringLeadsState = false;
         } catch (e) {
+            this.restoringLeadsState = false;
             await this.refreshCurrentView();
         }
     }
@@ -448,7 +490,9 @@ class LeadsManager {
         });
 
         return card;
-    }    // Select lead list for filtering
+    }
+
+    // Select lead list for filtering
     async selectLeadList(listId) {
         this.selectedListId = listId;
 
@@ -474,12 +518,24 @@ class LeadsManager {
         // Fetch leads for the selected list
         await this.refreshCurrentView();
 
+        // Populate the country checklist using a full-list scan (server-side, cached)
+        // This will ensure country filter contains ALL countries for that list, not just current page
+        try {
+            await this.populateCountryChecklistFromListId(listId);
+        } catch (err) {
+            console.warn('Failed to populate full-country checklist for list', listId, err);
+        }
+
         // Update the list filter dropdown to match
         const listFilter = document.getElementById('lead-list-filter');
         if (listFilter) {
             listFilter.value = listId || '';
         }
-    }// Load custom fields
+    }
+
+
+
+    // Load custom fields
     async loadCustomFields() {
         try {
             const response = await this.apiManager.authenticatedFetch(`${this.apiManager.API_URL}/lead-fields`);
@@ -515,6 +571,17 @@ class LeadsManager {
             // Add status filter
             if (filters.status && filters.status !== '') {
                 params.append('status', filters.status);
+            }
+
+            // Add country filter(s) - supports array or single value
+            if (filters.country) {
+                if (Array.isArray(filters.country)) {
+                    filters.country.forEach(c => {
+                        if (c) params.append('country', c);
+                    });
+                } else if (typeof filters.country === 'string' && filters.country.trim()) {
+                    params.append('country', filters.country.trim());
+                }
             }
 
             const response = await this.apiManager.authenticatedFetch(
@@ -952,12 +1019,26 @@ class LeadsManager {
             search: searchInput?.value || '',
             status: statusFilter?.value || '',
             listId: this.selectedListId // Include the selected list ID in filters
-        };        // Fetch leads for current page with current filters
+        };
+
+        // If country filters were previously selected, keep them
+        const checkedBoxes = Array.from(document.querySelectorAll('.lead-country-checkbox:checked'));
+        if (checkedBoxes.length) {
+            this.currentFilters.country = checkedBoxes.map(cb => cb.getAttribute('data-country'));
+        }
+
+        // Fetch leads for current page with current filters
         const result = await this.fetchLeads(this.currentPage, this.leadsPerPage, this.currentFilters);
         this.currentLeads = result.leads;
         this.totalPages = result.pagination.totalPages;
-        this.totalCount = result.pagination.totalCount;// Display the fetched leads
+        this.totalCount = result.pagination.totalCount;
+
+        // Display the fetched leads
         this.displayLeads(this.currentLeads);
+
+        // NOTE: removed page-based country checklist population to avoid overwriting the
+        // full-list checklist. Full-list checklist is populated by populateCountryChecklistFromListId
+        // when a list is selected.
     }
 
     // Generate dynamic table headers
@@ -1167,6 +1248,7 @@ class LeadsManager {
     }
 
     // Set up lead filters
+    // Set up lead filters
     setupLeadFilters() {
         // Clean up existing filter listeners first
         this.cleanupFilterEventListeners();
@@ -1179,28 +1261,69 @@ class LeadsManager {
         // Populate list filter dropdown
         this.populateListFilterDropdown();
 
-        // Function to apply filters (now with server-side pagination)
+        // Ensure a container exists for country checklist (prefer dropdown menu location)
+        let countryContainerWrapper = document.getElementById('lead-country-filter-container');
+        if (!countryContainerWrapper) {
+            const dropdownMenu = document.querySelector('#lead-country-filter-col .dropdown-menu');
+            if (dropdownMenu) {
+                countryContainerWrapper = document.createElement('div');
+                countryContainerWrapper.id = 'lead-country-filter-container';
+                // keep same inline scrolling behaviour used elsewhere
+                countryContainerWrapper.style.maxHeight = '240px';
+                countryContainerWrapper.style.overflowY = 'auto';
+                dropdownMenu.insertBefore(countryContainerWrapper, dropdownMenu.firstChild);
+            } else if (listFilter && listFilter.parentNode) {
+                countryContainerWrapper = document.createElement('div');
+                countryContainerWrapper.id = 'lead-country-filter-container';
+                countryContainerWrapper.className = 'mb-2';
+                listFilter.parentNode.insertBefore(countryContainerWrapper, listFilter.nextSibling);
+            }
+        }
+
+        // Do not clear if we're restoring or if checkboxes already exist (preserve restored checklist)
+        const wrapper = document.getElementById('lead-country-filter-container');
+        const hasCountryCheckboxes = wrapper && typeof wrapper.querySelectorAll === 'function'
+            && wrapper.querySelectorAll('.lead-country-checkbox').length > 0;
+        if (wrapper && !this.restoringLeadsState && !hasCountryCheckboxes) {
+            wrapper.innerHTML = '';
+        }
+
+        // Function to apply filters
         const applyFilters = async () => {
-            // Update current filters
             this.currentFilters = {
                 search: searchInput?.value || '',
-                status: statusFilter?.value || ''
+                status: statusFilter?.value || '',
+                listId: this.selectedListId
             };
 
-            // Reset to first page when applying new filters
-            this.currentPage = 1;
+            // Gather selected countries from checklist
+            const checkedBoxes = Array.from(document.querySelectorAll('.lead-country-checkbox:checked'));
+            if (checkedBoxes.length) {
+                this.currentFilters.country = checkedBoxes.map(cb => cb.getAttribute('data-country'));
+            } else {
+                delete this.currentFilters.country;
+            }
 
-            // Refresh view with new filters
+            // Reset page and refresh
+            this.currentPage = 1;
             await this.refreshCurrentView();
         };
 
-        // Set up event listeners and track them
+        // Allow other code (checkbox handlers) to trigger the same applyFilters logic
+        const applyFiltersEventHandler = () => { applyFilters(); };
+        document.addEventListener('leads:apply-filters', applyFiltersEventHandler);
+        this.eventListeners.push({
+            element: document,
+            event: 'leads:apply-filters',
+            handler: applyFiltersEventHandler
+        });
+
+        // Search input (debounced)
         if (searchInput) {
-            // Use debouncing for search input to avoid too many API calls
             let searchTimeout;
             const debouncedSearch = () => {
                 clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(applyFilters, 500); // 500ms delay
+                searchTimeout = setTimeout(applyFilters, 500);
             };
             searchInput.addEventListener('input', debouncedSearch);
             this.eventListeners.push({
@@ -1210,6 +1333,7 @@ class LeadsManager {
             });
         }
 
+        // Status filter
         if (statusFilter) {
             statusFilter.addEventListener('change', applyFilters);
             this.eventListeners.push({
@@ -1219,8 +1343,10 @@ class LeadsManager {
             });
         }
 
+        // List filter - ignore programmatic changes during restore
         if (listFilter) {
             const listFilterHandler = async (e) => {
+                if (this.restoringLeadsState) return;
                 const listId = e.target.value || null;
                 await this.selectLeadList(listId);
             };
@@ -1231,14 +1357,24 @@ class LeadsManager {
                 handler: listFilterHandler
             });
         }
+
+        // Reset filters button
         if (resetFiltersBtn) {
             const resetHandler = async () => {
                 if (searchInput) searchInput.value = '';
                 if (statusFilter) statusFilter.value = '';
                 if (listFilter) listFilter.value = '';
-                // Select first available list instead of null
+                // Clear country filters UI (preserve container element)
+                const w = document.getElementById('lead-country-filter-container');
+                if (w) w.innerHTML = '';
+
+                // Select first available list (keeps previous behavior)
                 if (this.allLeadLists.length > 0) {
                     await this.selectLeadList(this.allLeadLists[0]._id);
+                } else {
+                    this.selectedListId = null;
+                    this.currentFilters.listId = null;
+                    await this.refreshCurrentView();
                 }
             };
             resetFiltersBtn.addEventListener('click', resetHandler);
@@ -1247,6 +1383,145 @@ class LeadsManager {
                 event: 'click',
                 handler: resetHandler
             });
+        }
+
+        // Clear button inside Countries dropdown - do NOT close dropdown
+        const countryClearBtn = document.getElementById('lead-country-clear');
+        if (countryClearBtn) {
+            const countryClearHandler = async () => {
+                const w = document.getElementById('lead-country-filter-container');
+                if (w) {
+                    const boxes = w.querySelectorAll('.lead-country-checkbox');
+                    boxes.forEach(b => { b.checked = false; });
+                }
+                delete this.currentFilters.country;
+                this.currentPage = 1;
+                await this.refreshCurrentView();
+                // intentionally do NOT hide dropdown (data-bs-auto-close="false" is used)
+            };
+            countryClearBtn.addEventListener('click', countryClearHandler);
+            this.eventListeners.push({
+                element: countryClearBtn,
+                event: 'click',
+                handler: countryClearHandler
+            });
+        }
+
+        // If a selectedListId already exists (restored state), ensure the countries checklist is populated.
+        // Use fire-and-forget but set restoring flag while populating so handlers ignore programmatic changes.
+        if (this.selectedListId) {
+            (async () => {
+                try {
+                    this.restoringLeadsState = true;
+                    // Only populate if container exists and has no checkboxes yet
+                    const w2 = document.getElementById('lead-country-filter-container');
+                    const hasBoxes = w2 && typeof w2.querySelectorAll === 'function' && w2.querySelectorAll('.lead-country-checkbox').length > 0;
+                    if (w2 && !hasBoxes) {
+                        await this.populateCountryChecklistFromListId(this.selectedListId);
+                    }
+                } catch (err) {
+                    console.warn('populateCountryChecklistFromListId failed after setup:', err);
+                } finally {
+                    this.restoringLeadsState = false;
+                }
+            })();
+        }
+    }
+
+
+    // Fetch all pages for the selected list and collect unique countries (returns array)
+    async getAllCountriesForList(listId) {
+        if (!listId) return [];
+
+        try {
+            const url = `${this.apiManager.API_URL}/leads/countries?listId=${encodeURIComponent(listId)}`;
+            console.debug('[FRONTEND] fetching countries from', url);
+            const resp = await this.apiManager.authenticatedFetch(url);
+            // surface auth / server errors so we don't silently paginate
+            if (!resp.ok) {
+                const body = await resp.text().catch(() => '');
+                throw new Error(`Countries endpoint error: ${resp.status} ${resp.statusText} ${body}`);
+            }
+            const countries = await resp.json();
+            if (!Array.isArray(countries)) {
+                throw new Error('Countries endpoint returned unexpected payload');
+            }
+            // cleanup and unique/sort
+            const cleaned = Array.from(new Set(countries.map(c => (c || '').toString().trim()).filter(Boolean)));
+            return cleaned.sort((a, b) => a.localeCompare(b));
+        } catch (err) {
+            // Let caller know (populateCountryChecklistFromListId catches and logs)
+            console.error('getAllCountriesForList failed:', err);
+            throw err;
+        }
+    }
+
+    // Small helper to render the checklist from a pre-built country array (reuse existing UI logic)
+    async populateCountryChecklistFromListId(listId) {
+        const wrapper = document.getElementById('lead-country-filter-container');
+        if (!wrapper) return;
+
+        // If no list selected, clear UI
+        if (!listId) {
+            wrapper.innerHTML = '';
+            return;
+        }
+
+        // Show loading state
+        wrapper.innerHTML = '<div class="text-muted">Loading countries...</div>';
+
+        try {
+            // Use cached countries when available
+            this.countriesCache = this.countriesCache || {};
+            let countries = this.countriesCache[listId];
+
+            if (!countries) {
+                countries = await this.getAllCountriesForList(listId);
+                this.countriesCache[listId] = countries || [];
+            }
+
+            if (!countries || countries.length === 0) {
+                wrapper.innerHTML = '';
+                return;
+            }
+
+            // Render checklist (preserve existing selections)
+            const titleHtml = `<label class="form-label mb-1">Country</label>`;
+            const listHtml = countries.map(country => {
+                const checked = Array.isArray(this.currentFilters.country) && this.currentFilters.country.includes(country) ? 'checked' : '';
+                const safeId = `lead-country-${country.replace(/\s+/g, '_')}`;
+                return `
+                    <div class="form-check">
+                        <input class="form-check-input lead-country-checkbox" type="checkbox" value="${country}" id="${safeId}" data-country="${country}" ${checked}>
+                        <label class="form-check-label" for="${safeId}">${country}</label>
+                    </div>
+                `;
+            }).join('');
+
+            wrapper.innerHTML = `${titleHtml}<div id="lead-country-filter">${listHtml}</div>`;
+
+            // Attach change listeners (replace nodes to avoid duplicate handlers)
+            const checkboxes = wrapper.querySelectorAll('.lead-country-checkbox');
+            checkboxes.forEach(cb => {
+                const newCb = cb.cloneNode(true);
+                cb.parentNode.replaceChild(newCb, cb);
+
+                const handler = async () => {
+
+                    +                    // Trigger centralized filter application defined in setupLeadFilters
+                        +                    document.dispatchEvent(new CustomEvent('leads:apply-filters'));
+                };
+
+                newCb.addEventListener('change', handler);
+                this.eventListeners.push({
+                    element: newCb,
+                    event: 'change',
+                    handler: handler
+                });
+            });
+        } catch (err) {
+            console.error('Error populating country checklist for list', listId, err);
+            wrapper.innerHTML = '';
         }
     }
 
@@ -1506,6 +1781,14 @@ class LeadsManager {
             leadNotesContainer.parentNode.appendChild(createMeetingBtn);
 
             createMeetingBtn.onclick = () => {
+                // Use same logic as Lead Notes modal for lead name
+                const firstName = lead.customFields?.firstName || lead.customFields?.['First Name'] || '';
+                const lastName = lead.customFields?.lastName || lead.customFields?.['Last Name'] || '';
+                let leadName = `${firstName} ${lastName}`.trim();
+                if (!leadName) {
+                    leadName = lead.customFields?.fullName || lead.customFields?.['Full Name'] || '';
+                }
+
                 // Show meeting modal
                 let modal = document.getElementById('leadMeetingModal');
                 if (!modal) {
@@ -1514,39 +1797,43 @@ class LeadsManager {
                     modal.id = 'leadMeetingModal';
                     modal.tabIndex = -1;
                     modal.innerHTML = `
-                        <div class="modal-dialog">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">Create Meeting for Lead</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <form id="lead-meeting-form">
-                                        <div class="mb-3">
-                                            <label for="lead-meeting-title" class="form-label">Title</label>
-                                            <input type="text" class="form-control" id="lead-meeting-title" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="lead-meeting-date" class="form-label">Date</label>
-                                            <input type="date" class="form-control" id="lead-meeting-date" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="lead-meeting-time" class="form-label">Time</label>
-                                            <input type="time" class="form-control" id="lead-meeting-time">
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="lead-meeting-desc" class="form-label">Description</label>
-                                            <textarea class="form-control" id="lead-meeting-desc" rows="2"></textarea>
-                                        </div>
-                                    </form>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                    <button type="button" class="btn btn-primary" id="save-lead-meeting-btn">Save Meeting</button>
-                                </div>
-                            </div>
-                        </div>
-                    `;
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create Meeting for Lead</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="lead-meeting-form">
+                    <div class="mb-3">
+                        <label class="form-label">Lead Name</label>
+                        <input type="text" class="form-control" value="${leadName}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="lead-meeting-title" class="form-label">Title</label>
+                        <input type="text" class="form-control" id="lead-meeting-title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="lead-meeting-date" class="form-label">Date</label>
+                        <input type="date" class="form-control" id="lead-meeting-date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="lead-meeting-time" class="form-label">Time</label>
+                        <input type="time" class="form-control" id="lead-meeting-time">
+                    </div>
+                    <div class="mb-3">
+                        <label for="lead-meeting-desc" class="form-label">Description</label>
+                        <textarea class="form-control" id="lead-meeting-desc" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-lead-meeting-btn">Save Meeting</button>
+            </div>
+        </div>
+    </div>
+`;
                     document.body.appendChild(modal);
                 }
                 // Reset form fields
@@ -1574,7 +1861,8 @@ class LeadsManager {
                         time,
                         notes: desc,
                         module: 'Lead',
-                        leadId: lead._id // Link to this lead
+                        leadId: lead._id, // Link to this lead
+                        leadFullName: leadName // Use the same logic for full name
                     };
                     try {
                         await window.calendarManager.saveAppointment(appt);
@@ -2409,10 +2697,20 @@ class LeadsManager {
     cleanupFilterEventListeners() {
         // Remove event listeners that are specific to filter elements
         this.eventListeners = this.eventListeners.filter(listener => {
-            const isFilterListener = listener.element.id === 'lead-search' ||
-                listener.element.id === 'lead-status-filter' ||
-                listener.element.id === 'lead-list-filter' ||
-                listener.element.id === 'reset-filters-btn';
+            const el = listener.element;
+
+            // Keep country checkbox listeners (they may have been attached during restore and should persist)
+            const isCountryCheckbox = el?.classList && el.classList.contains('lead-country-checkbox');
+
+            const isFilterListener = !isCountryCheckbox && (
+                el.id === 'lead-search' ||
+                el.id === 'lead-status-filter' ||
+                el.id === 'lead-list-filter' ||
+                el.id === 'reset-filters-btn' ||
+                el.id === 'lead-country-clear' || // keep clear button removal
+                // remove the document-level custom event handler if present
+                (el === document && listener.event === 'leads:apply-filters')
+            );
 
             if (isFilterListener) {
                 listener.element.removeEventListener(listener.event, listener.handler);
@@ -2420,7 +2718,7 @@ class LeadsManager {
             }
             return true; // Keep in tracking array
         });
-    }    // Clean up modal event listeners
+    }   // Clean up modal event listeners
     cleanupModalEventListeners() {
         // Remove event listeners that are specific to modal elements
         this.eventListeners = this.eventListeners.filter(listener => {
@@ -2502,8 +2800,6 @@ class LeadsManager {
                         this.selectLeadList(this.allLeadLists[0]._id);
                     } else {
                         this.selectedListId = null;
-                        // Clear the leads display if no lists are available
-                        this.displayLeads([]);
                     }
                     return; // selectLeadList will handle the display update
                 }

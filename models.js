@@ -6,8 +6,9 @@ const meetingSchema = new mongoose.Schema({
     date: { type: String, required: true }, // 'YYYY-MM-DD'
     time: { type: String }, // Optional, e.g. '14:00'
     notes: { type: String },
-    leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead' }, // <-- Add this line
+    leadId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lead' },
     module: { type: String }, // Optional, e.g. 'Lead'
+    leadFullName: { type: String }, // <-- Add this line
     createdAt: { type: Date, default: Date.now }
 }, { _id: true });
 

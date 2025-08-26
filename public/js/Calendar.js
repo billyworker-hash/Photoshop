@@ -324,18 +324,19 @@ class CalendarManager {
                     <ul class="list-group list-group-flush mb-0" data-date="${date}">`;
             grouped[date].forEach(a => {
                 html += `<li class="list-group-item d-flex flex-column flex-md-row align-items-md-center justify-content-between py-2" data-appt-id="${a._id || a.id}">
-                <div>
-                    <span class="fw-bold">${a.title}</span>
-                    ${a.time ? `<span class="badge bg-secondary ms-2">${a.time}</span>` : ''}
-                    ${a.notes ? `<span class="text-muted ms-2">(${a.notes})</span>` : ''}
-                </div>
-                <div>
-                    <span class="badge bg-info text-dark mt-2 mt-md-0">${a.module || ''}</span>
-                    <button class="btn btn-sm btn-danger ms-2 delete-appt-btn" data-appt-id="${a._id || a.id}" title="Delete Appointment">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-            </li>`;
+        <div>
+            <span class="fw-bold">${a.title}</span>
+            ${a.time ? `<span class="badge bg-secondary ms-2">${a.time}</span>` : ''}
+            ${a.leadFullName ? `<span class="badge bg-success ms-2">${a.leadFullName}</span>` : ''}
+            ${a.notes ? `<span class="text-muted ms-2">(${a.notes})</span>` : ''}
+        </div>
+        <div>
+            <span class="badge bg-info text-dark mt-2 mt-md-0">${a.module || ''}</span>
+            <button class="btn btn-sm btn-danger ms-2 delete-appt-btn" data-appt-id="${a._id || a.id}" title="Delete Appointment">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    </li>`;
             });
             html += `</ul>
                 </div>
@@ -460,39 +461,44 @@ window.openAppointmentModal = function (dateStr) {
         modal.id = 'appointmentModal';
         modal.tabIndex = -1;
         modal.innerHTML = `
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Create Appointment</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div id="appointments-list"></div>
-                    <form id="appointment-form">
-                        <div class="mb-3">
-                            <label for="appointment-title" class="form-label">Title</label>
-                            <input type="text" class="form-control" id="appointment-title" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="appointment-date" class="form-label">Date</label>
-                            <input type="date" class="form-control" id="appointment-date" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="appointment-time" class="form-label">Time</label>
-                            <input type="time" class="form-control" id="appointment-time">
-                        </div>
-                        <div class="mb-3">
-                            <label for="appointment-notes" class="form-label">Notes</label>
-                            <textarea class="form-control" id="appointment-notes" rows="2"></textarea>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="save-appointment-btn">Save Appointment</button>
-                </div>
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create Appointment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-        </div>`;
+            <div class="modal-body">
+                <div id="appointments-list"></div>
+                <form id="appointment-form">
+                    <div class="mb-3">
+                        <label for="appointment-lead-name" class="form-label">Lead Name</label>
+                        <input type="text" class="form-control" id="appointment-lead-name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="appointment-title" class="form-label">Title</label>
+                        <input type="text" class="form-control" id="appointment-title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="appointment-date" class="form-label">Date</label>
+                        <input type="date" class="form-control" id="appointment-date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="appointment-time" class="form-label">Time</label>
+                        <input type="time" class="form-control" id="appointment-time" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="appointment-notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="appointment-notes" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-appointment-btn">Save Appointment</button>
+            </div>
+        </div>
+    </div>
+`;
         document.body.appendChild(modal);
     }
     // Reset form fields
@@ -523,13 +529,15 @@ window.openAppointmentModal = function (dateStr) {
                             ? 'color:green;font-weight:bold;'
                             : 'color:red;font-weight:bold;';
                         return `
-                        <div class='alert alert-info py-1 px-2 mb-1 d-flex justify-content-between align-items-center'>
-                            <div>
-                                <b style='${colorStyle}'>${a.title}</b>${a.time ? ' @ ' + a.time : ''}<br><small>${a.notes || ''}</small>
-                            </div>
-                            <button class="btn btn-sm btn-danger ms-2 delete-appt-btn" data-appt-id="${a._id || a.id}"><i class="bi bi-trash"></i></button>
-                        </div>
-                        `;
+    <div class='alert alert-info py-1 px-2 mb-1 d-flex justify-content-between align-items-center'>
+        <div>
+            <b style='${colorStyle}'>${a.title}</b>${a.time ? ' @ ' + a.time : ''}
+            ${a.leadFullName ? `<span class="badge bg-success ms-2">${a.leadFullName}</span>` : ''}
+            <br><small>${a.notes || ''}</small>
+        </div>
+        <button class="btn btn-sm btn-danger ms-2 delete-appt-btn" data-appt-id="${a._id || a.id}"><i class="bi bi-trash"></i></button>
+    </div>
+`;
                     }).join('');
             } else {
                 appointmentsList.innerHTML = '';
@@ -563,18 +571,22 @@ window.openAppointmentModal = function (dateStr) {
     bsModal.show();
     // Save handler
     document.getElementById('save-appointment-btn').onclick = async () => {
+        const form = document.getElementById('appointment-form');
+        if (!form.reportValidity()) return; // Show browser validation messages and stop if invalid
+
         const title = document.getElementById('appointment-title').value.trim();
         const date = document.getElementById('appointment-date').value;
         const time = document.getElementById('appointment-time').value;
         const notes = document.getElementById('appointment-notes').value.trim();
-        if (!title || !date) return;
+        const leadFullName = document.getElementById('appointment-lead-name').value.trim();
         // Save to backend
         const appt = {
             title,
             date,
             time,
             notes,
-            module: 'Manual'
+            module: 'Manual',
+            leadFullName
         };
         if (window.calendarManager) {
             await window.calendarManager.saveAppointment(appt);
@@ -611,6 +623,9 @@ window.openAppointmentModal = function (dateStr) {
         }
         .calendar-appts {
             max-height: 70px;
+        const form = document.getElementById('appointment-form');
+        if (!form.reportValidity()) return; // Show browser validation messages and stop if invalid
+
             overflow-y: auto;
             margin-bottom: 0;
             padding-left: 0;
