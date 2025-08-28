@@ -986,6 +986,7 @@ class UploadManager {
             { name: 'firstName', label: 'First Name' },
             { name: 'lastName', label: 'Last Name' },
             { name: 'email', label: 'Email' },
+            { name: 'country', label: 'Country' },
             { name: 'phone', label: 'Phone' },
             { name: 'amount', label: 'Amount' },
             { name: 'date', label: 'Date' },
