@@ -140,6 +140,7 @@ class CustomerManager {
                 row.dataset.customerId = customer._id;
                 tableBody.appendChild(row);
                 // Add event listener to the entire row to open notes modal, but ignore clicks on dropdowns
+                // Enhanced row click handler: ignore clicks that are actually text selection/drag gestures
                 const rowClickHandler = (e) => {
                     // Don't trigger if the click was on a dropdown, phone link/button, or their elements
                     if (
@@ -152,9 +153,34 @@ class CustomerManager {
                     ) {
                         return;
                     }
+
+                    // If the user selected text (dragged to select), don't open the modal
+                    if (window.getSelection && window.getSelection().toString().trim()) {
+                        return;
+                    }
+
+                    // If user dragged the mouse (long press + move), skip triggering the click.
+                    // We recorded mousedown coords on the row; ignore if movement > threshold (5px)
+                    const downX = parseInt(row.dataset.mousedownX || '0', 10);
+                    const downY = parseInt(row.dataset.mousedownY || '0', 10);
+                    const dx = Math.abs((e.clientX || 0) - downX);
+                    const dy = Math.abs((e.clientY || 0) - downY);
+                    if (downX && (dx > 5 || dy > 5)) {
+                        return;
+                    }
+
                     this.openCustomerNotesModal(customer);
                 };
+
+                // Track mousedown position to detect drag vs click (prevents opening modal on selection)
+                const rowMouseDownHandler = (ev) => {
+                    row.dataset.mousedownX = ev.clientX;
+                    row.dataset.mousedownY = ev.clientY;
+                };
+                row.addEventListener('mousedown', rowMouseDownHandler);
                 row.addEventListener('click', rowClickHandler);
+                // Note: we don't currently track listeners for cleanup in this manager, adding listeners directly
+
             });
 
             // Add event listeners to phone spans to enable click-to-call
@@ -345,16 +371,30 @@ class CustomerManager {
     formatStatus(status) {
         if (!status) return 'Active';
         return status.charAt(0).toUpperCase() + status.slice(1);
-    }    // Open customer notes modal (mirrors openLeadNotesModal)
+    }
+
+    // Open customer notes modal (mirrors openLeadNotesModal)
     openCustomerNotesModal(customer) {
         // Use the original leadId for meetings if available
         const modalEntity = customer.originalLead ? { ...customer, _id: customer.originalLead } : customer;
+
+        // Open the lead notes modal using the leads manager (keeps meetings/notes logic)
         window.leadsManager.openLeadNotesModal(modalEntity);
 
-        // Optionally adjust modal title for customer context
+        // Update modal title to include lead/customer name + email (match Leads.js behavior)
         const modalTitle = document.querySelector('#leadNotesModal .modal-title');
         if (modalTitle) {
-            modalTitle.textContent = `Notes for ${customer.fullName || 'Customer'}`;
+            const firstName = modalEntity.customFields?.firstName || modalEntity.customFields?.['First Name'] || '';
+            const lastName = modalEntity.customFields?.lastName || modalEntity.customFields?.['Last Name'] || '';
+            let leadName = `${firstName} ${lastName}`.trim();
+            if (!leadName) {
+                leadName = modalEntity.customFields?.fullName || modalEntity.customFields?.['Full Name'] || modalEntity.fullName || '';
+            }
+            let email = modalEntity.customFields?.email || modalEntity.customFields?.Email || modalEntity.email || '';
+            modalTitle.innerHTML = leadName || `Notes for ${customer.fullName || 'Customer'}`;
+            if (email) {
+                modalTitle.innerHTML += `<br><span style="font-size:0.95em;color:#555;">${email}</span>`;
+            }
         }
 
         // Hide "Own Lead" and "Transfer Lead" buttons for customers

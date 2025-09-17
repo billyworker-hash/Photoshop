@@ -103,6 +103,7 @@ class DepositorManager {
                 row.innerHTML = this.generateDepositorRow(depositor);
                 row.dataset.depositorId = depositor._id;
                 // Add click event listener to open depositor modal, but ignore clicks on dropdowns
+                // Enhanced row click handler: ignore clicks that are actually text selection/drag gestures
                 const rowClickHandler = (e) => {
                     // Don't trigger if the click was on a dropdown, phone link/button, or their elements
                     if (
@@ -115,9 +116,33 @@ class DepositorManager {
                     ) {
                         return;
                     }
+
+                    // If the user selected text (dragged to select), don't open the modal
+                    if (window.getSelection && window.getSelection().toString().trim()) {
+                        return;
+                    }
+
+                    // If user dragged the mouse (long press + move), skip triggering the click.
+                    // We recorded mousedown coords on the row; ignore if movement > threshold (5px)
+                    const downX = parseInt(row.dataset.mousedownX || '0', 10);
+                    const downY = parseInt(row.dataset.mousedownY || '0', 10);
+                    const dx = Math.abs((e.clientX || 0) - downX);
+                    const dy = Math.abs((e.clientY || 0) - downY);
+                    if (downX && (dx > 5 || dy > 5)) {
+                        return;
+                    }
+
                     this.openDepositorNotesModal(depositor);
                 };
+
+                // Track mousedown position to detect drag vs click (prevents opening modal on selection)
+                const rowMouseDownHandler = (ev) => {
+                    row.dataset.mousedownX = ev.clientX;
+                    row.dataset.mousedownY = ev.clientY;
+                };
+                row.addEventListener('mousedown', rowMouseDownHandler);
                 row.addEventListener('click', rowClickHandler);
+                // Note: listeners are added directly here; if you add cleanup logic, track these handlers for removal
 
                 tableBody.appendChild(row);
             });

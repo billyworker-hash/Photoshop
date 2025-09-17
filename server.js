@@ -30,10 +30,19 @@ mongoose.connect(process.env.MONGODB_URI)
 // Helper function to ensure "Users with no list" list exists
 async function ensureUsersWithNoListExists() {
     try {
-        let usersWithNoList = await LeadList.findOne({ name: 'Users with no list' });
+        // Canonical name switched to "Clients with no list"
+        const DEFAULT_LIST_NAME = 'Clients with no list';
+        // Accept either the current canonical name or the old "Users with no list" to avoid duplicates
+        let usersWithNoList = await LeadList.findOne({
+            $or: [
+                { name: DEFAULT_LIST_NAME },
+                { name: 'Users with no list' }
+            ]
+        });
+
         if (!usersWithNoList) {
             usersWithNoList = new LeadList({
-                name: 'Clients with no list',
+                name: DEFAULT_LIST_NAME,
                 description: 'Default list for users whose original lead list has been deleted',
                 labels: [
                     { name: 'First Name', label: 'First Name', type: 'text' },
@@ -44,12 +53,19 @@ async function ensureUsersWithNoListExists() {
                     { name: 'Date', label: 'Date', type: 'text' },
                     { name: 'Brand', label: 'Brand', type: 'text' },
                 ],
-                isSystem: true, // Mark as system list
-                isVisible: false // Ensure system lists are visible by default
+                isSystem: true,
+                isVisible: false
             });
 
             await usersWithNoList.save();
-            console.log('Created "Clients with no list" system list');
+            console.log(`Created "${DEFAULT_LIST_NAME}" system list`);
+        } else {
+            // If we found the old-named list ("Users with no list"), rename it to canonical name
+            if (usersWithNoList.name === 'Users with no list') {
+                usersWithNoList.name = DEFAULT_LIST_NAME;
+                await usersWithNoList.save();
+                console.log('Renamed "Users with no list" -> "Clients with no list"');
+            }
         }
 
         return usersWithNoList;
