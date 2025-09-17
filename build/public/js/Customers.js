@@ -13,14 +13,13 @@ class CustomerManager {
     // Apply status color classes to all status dropdowns and options
     applyStatusColors() {
         const statusClassMap = {
-            'new': 'status-new',
+            'New': 'status-new',
             'No Answer': 'status-no-answer',
-            'Hang Up': 'status-hang-up',
             'Voice Mail': 'status-voice-mail',
             'Wrong Number': 'status-wrong-number',
             'Call Back Qualified': 'status-call-back-qualified',
-            'Call Back NOT Qualified': 'status-call-back-not-qualified',
-            'Deposited': 'status-Deposited'
+            'Never Invested': 'status-never-invested',
+            'Not Interested': 'status-not-interested'
         };
         const allStatusClasses = Object.values(statusClassMap);
 
@@ -282,8 +281,8 @@ class CustomerManager {
         const createdDate = formatDateDMY(customer.createdAt);
         rowHtml += `<td>${createdDate}</td>`;
         // Add Status dropdown
-        const statusOptions = ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Call Back NOT Qualified', 'Deposited'];
-        const currentStatus = customer.status || 'new';
+        const statusOptions = ['New', 'No Answer', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'];
+        const currentStatus = customer.status || 'New';
         rowHtml += `
             <td>
                 <select class="form-select form-select-sm customer-status-dropdown" 
@@ -655,7 +654,7 @@ class CustomerManager {
             if (dropdown) {
                 const customer = this.allCustomers.find(c => c._id === customerId);
                 if (customer) {
-                    dropdown.value = customer.status || 'new';
+                    dropdown.value = customer.status || 'New';
                 }
             }
         }
@@ -707,18 +706,15 @@ class CustomerManager {
             const status = dropdown.value;
             // Remove existing status color classes
             dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail',
-                'status-call-back-qualified', 'status-call-back-not-qualified', 'status-hang-up', 'status-Deposited', 'status-wrong-number');
+                'status-call-back-qualified', 'status-wrong-number', 'status-never-invested', 'status-not-interested');
 
             // Add class based on current status
             switch (status) {
-                case 'new':
+                case 'New':
                     dropdown.classList.add('status-new');
                     break;
                 case 'No Answer':
                     dropdown.classList.add('status-no-answer');
-                    break;
-                case 'Hang Up':
-                    dropdown.classList.add('status-hang-up');
                     break;
                 case 'Voice Mail':
                     dropdown.classList.add('status-voice-mail');
@@ -729,11 +725,12 @@ class CustomerManager {
                 case 'Call Back Qualified':
                     dropdown.classList.add('status-call-back-qualified');
                     break;
-                case 'Call Back NOT Qualified':
-                    dropdown.classList.add('status-call-back-not-qualified');
+                case 'Never Invested':
+                    dropdown.classList.add('status-never-invested');
                     break;
-                case 'Deposited':
-                    dropdown.classList.add('status-Deposited');
+                case 'Not Interested':
+                    dropdown.classList.add('status-not-interested');
+                    break;
                     break;
             }
         });

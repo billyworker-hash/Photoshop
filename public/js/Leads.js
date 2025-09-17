@@ -4,14 +4,13 @@ class LeadsManager {
     applyStatusColors() {
         // Statuses and their corresponding CSS classes
         const statusClassMap = {
-            'new': 'status-new',
+            'New': 'status-new',
             'No Answer': 'status-no-answer',
-            'Hang Up': 'status-hang-up',
             'Voice Mail': 'status-voice-mail',
             'Wrong Number': 'status-wrong-number',
             'Call Back Qualified': 'status-call-back-qualified',
-            'Call Back NOT Qualified': 'status-call-back-not-qualified',
-            'Deposited': 'status-Deposited'
+            'Never Invested': 'status-never-invested',
+            'Not Interested': 'status-not-interested'
         };
         const allStatusClasses = Object.values(statusClassMap);
 
@@ -1195,14 +1194,13 @@ class LeadsManager {
 
         // Add status dropdown column
         const statusOptions = [
-            'new',
+            'New',
             'No Answer',
-            'Hang Up',
             'Voice Mail',
             'Wrong Number',
             'Call Back Qualified',
-            'Call Back NOT Qualified',
-            'Deposited'
+            'Never Invested',
+            'Not Interested'
         ];
 
         let statusHtml = `

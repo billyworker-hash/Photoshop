@@ -244,8 +244,8 @@ class DepositorManager {
         const createdDate = new Date(depositor.createdAt).toLocaleDateString();
         rowHtml += `<td>${createdDate}</td>`;
         // Add Status
-        const statusOptions = ['new', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Call Back NOT Qualified', 'Deposited'];
-        const currentStatus = depositor.status || 'new';
+        const statusOptions = ['New', 'No Answer', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'];
+        const currentStatus = depositor.status || 'New';
         rowHtml += `
             <td>
                 <select class="form-select form-select-sm depositor-status-dropdown" 
@@ -367,7 +367,7 @@ class DepositorManager {
             depositorNoteId.value = depositor._id;
         }
         if (depositorNoteStatus) {
-            depositorNoteStatus.value = depositor.status || 'new';
+            depositorNoteStatus.value = depositor.status || 'New';
         }
 
         // Display previous notes if any
@@ -733,7 +733,7 @@ class DepositorManager {
             if (dropdown) {
                 const depositor = this.allDepositors.find(d => d._id === depositorId);
                 if (depositor) {
-                    dropdown.value = depositor.status || 'new';
+                    dropdown.value = depositor.status || 'New';
                 }
             }
         }
@@ -785,18 +785,15 @@ class DepositorManager {
             const status = dropdown.value;
             // Remove existing status color classes
             dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail',
-                'status-call-back-qualified', 'status-call-back-not-qualified', 'status-hang-up', 'status-Deposited', 'status-wrong-number');
+                'status-call-back-qualified', 'status-wrong-number', 'status-never-invested', 'status-not-interested');
 
             // Add class based on current status
             switch (status) {
-                case 'new':
+                case 'New':
                     dropdown.classList.add('status-new');
                     break;
                 case 'No Answer':
                     dropdown.classList.add('status-no-answer');
-                    break;
-                case 'Hang Up':
-                    dropdown.classList.add('status-hang-up');
                     break;
                 case 'Voice Mail':
                     dropdown.classList.add('status-voice-mail');
@@ -807,11 +804,12 @@ class DepositorManager {
                 case 'Call Back Qualified':
                     dropdown.classList.add('status-call-back-qualified');
                     break;
-                case 'Call Back NOT Qualified':
-                    dropdown.classList.add('status-call-back-not-qualified');
+                case 'Never Invested':
+                    dropdown.classList.add('status-never-invested');
                     break;
-                case 'Deposited':
-                    dropdown.classList.add('status-Deposited');
+                case 'Not Interested':
+                    dropdown.classList.add('status-not-interested');
+                    break;
                     break;
             }
         });

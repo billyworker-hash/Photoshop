@@ -815,14 +815,13 @@ app.get('/api/dashboard/stats', authenticate, async (req, res) => {
         ]).allowDiskUse(true);
 
         const statusCounts = {
-            new: 0,
+            New: 0,
             'No Answer': 0,
-            'Hang Up': 0,
             'Voice Mail': 0,
             'Wrong Number': 0,
             'Call Back Qualified': 0,
-            'Call Back NOT Qualified': 0,
-            'Deposited': 0
+            'Never Invested': 0,
+            'Not Interested': 0
         };
         statusBreakdownAgg.forEach(item => {
             if (statusCounts.hasOwnProperty(item._id)) {
@@ -1832,7 +1831,7 @@ app.patch('/api/depositors/:id/status', authenticate, async (req, res) => {
         if (!status) {
             return res.status(400).json({ message: 'Status is required' });
         }
-        const validStatuses = ['new', 'No Answer', 'Hang Up', 'No Service', 'Voice Mail', 'Call Back Qualified', 'Call Back NOT Qualified', 'Deposited', 'active', 'inactive'];
+        const validStatuses = ['New', 'No Answer', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ message: 'Invalid status' });
         }

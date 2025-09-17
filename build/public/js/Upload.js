@@ -271,8 +271,7 @@ class UploadManager {
         const statusCell = row.querySelector('td[data-field="status"]');
         if (statusCell) {
             const statusOptions = [
-                'new', 'No Answer', 'Voice Mail', 'Call Back Qualified',
-                'Call Back NOT Qualified', 'Deposited', 'active', 'inactive'
+                'New', 'No Answer', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'
             ];
 
             statusCell.innerHTML = `
@@ -625,15 +624,13 @@ class UploadManager {
         <div class="col-md-4 mb-3">
             <label class="form-label">Status *</label>
             <select class="form-select" name="status" required>
-                <option value="new">New</option>
+                <option value="New">New</option>
                 <option value="No Answer">No Answer</option>
                 <option value="Voice Mail">Voice Mail</option>
+                <option value="Wrong Number">Wrong Number</option>
                 <option value="Call Back Qualified">Call Back Qualified</option>
-                <option value="Call Back NOT Qualified">Call Back NOT Qualified</option>
-                <option value="Deposited">Deposited</option>
-                <option value="active">Active</option>
-             
-                <option value="inactive">Inactive</option>
+                <option value="Never Invested">Never Invested</option>
+                <option value="Not Interested">Not Interested</option>
             </select>
             <small class="text-muted">This will apply to all leads</small>
         </div>
