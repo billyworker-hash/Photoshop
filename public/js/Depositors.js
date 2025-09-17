@@ -269,7 +269,7 @@ class DepositorManager {
         const createdDate = new Date(depositor.createdAt).toLocaleDateString();
         rowHtml += `<td>${createdDate}</td>`;
         // Add Status
-        const statusOptions = ['New', 'No Answer', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'];
+        const statusOptions = ['New', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'];
         const currentStatus = depositor.status || 'New';
         rowHtml += `
             <td>
@@ -809,7 +809,7 @@ class DepositorManager {
         document.querySelectorAll('.depositor-status-dropdown').forEach(dropdown => {
             const status = dropdown.value;
             // Remove existing status color classes
-            dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail',
+            dropdown.classList.remove('status-new', 'status-no-answer', 'status-hang-up', 'status-voice-mail',
                 'status-call-back-qualified', 'status-wrong-number', 'status-never-invested', 'status-not-interested');
 
             // Add class based on current status

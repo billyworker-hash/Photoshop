@@ -15,6 +15,7 @@ class CustomerManager {
         const statusClassMap = {
             'New': 'status-new',
             'No Answer': 'status-no-answer',
+            'Hang Up': 'status-hang-up',
             'Voice Mail': 'status-voice-mail',
             'Wrong Number': 'status-wrong-number',
             'Call Back Qualified': 'status-call-back-qualified',
@@ -307,7 +308,7 @@ class CustomerManager {
         const createdDate = formatDateDMY(customer.createdAt);
         rowHtml += `<td>${createdDate}</td>`;
         // Add Status dropdown
-        const statusOptions = ['New', 'No Answer', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'];
+        const statusOptions = ['New', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'];
         const currentStatus = customer.status || 'New';
         rowHtml += `
             <td>
@@ -745,7 +746,7 @@ class CustomerManager {
         document.querySelectorAll('.customer-status-dropdown').forEach(dropdown => {
             const status = dropdown.value;
             // Remove existing status color classes
-            dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail',
+            dropdown.classList.remove('status-new', 'status-no-answer', 'status-hang-up', 'status-voice-mail',
                 'status-call-back-qualified', 'status-wrong-number', 'status-never-invested', 'status-not-interested');
 
             // Add class based on current status

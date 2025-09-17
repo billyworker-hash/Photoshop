@@ -78,7 +78,7 @@ leadListSchema.pre('save', function (next) {
 const leadSchema = new mongoose.Schema({
     status: {
         type: String,
-        enum: ['New', 'No Answer', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'],
+        enum: ['New', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'],
         default: 'New'
     },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -96,7 +96,7 @@ const leadSchema = new mongoose.Schema({
 const customerSchema = new mongoose.Schema({
     status: {
         type: String,
-        enum: ['New', 'No Answer', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'],
+        enum: ['New', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'],
         default: 'New'
     },
     customFields: { type: Map, of: mongoose.Schema.Types.Mixed }, // Copy of lead's custom fields
@@ -126,7 +126,7 @@ const customerSchema = new mongoose.Schema({
 const depositorSchema = new mongoose.Schema({
     status: {
         type: String,
-        enum: ['New', 'No Answer', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'],
+        enum: ['New', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'],
         default: 'New'
     },
     customFields: { type: Map, of: mongoose.Schema.Types.Mixed }, // Copy of customer's custom fields

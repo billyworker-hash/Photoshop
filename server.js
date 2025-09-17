@@ -833,6 +833,7 @@ app.get('/api/dashboard/stats', authenticate, async (req, res) => {
         const statusCounts = {
             New: 0,
             'No Answer': 0,
+            'Hang Up': 0,
             'Voice Mail': 0,
             'Wrong Number': 0,
             'Call Back Qualified': 0,
@@ -1847,7 +1848,7 @@ app.patch('/api/depositors/:id/status', authenticate, async (req, res) => {
         if (!status) {
             return res.status(400).json({ message: 'Status is required' });
         }
-        const validStatuses = ['New', 'No Answer', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'];
+        const validStatuses = ['New', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ message: 'Invalid status' });
         }

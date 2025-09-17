@@ -14,6 +14,11 @@
     color: #fff !important;
 }
 
+.status-hang-up {
+    background-color: #e83e8c !important;
+    color: #fff !important;
+}
+
 .status-wrong-number {
     background-color: #dc3545 !important;
     color: #fff !important;
@@ -61,6 +66,16 @@
 .depositor-status-dropdown option[value="No Answer"],
 .depositor-status-dropdown.status-no-answer {
     color: #fd7e14 !important;
+    font-weight: bold;
+}
+
+.lead-status-dropdown option[value="Hang Up"],
+.lead-status-dropdown.status-hang-up,
+.customer-status-dropdown option[value="Hang Up"],
+.customer-status-dropdown.status-hang-up,
+.depositor-status-dropdown option[value="Hang Up"],
+.depositor-status-dropdown.status-hang-up {
+    color: #e83e8c !important;
     font-weight: bold;
 }
 

@@ -271,7 +271,7 @@ class UploadManager {
         const statusCell = row.querySelector('td[data-field="status"]');
         if (statusCell) {
             const statusOptions = [
-                'New', 'No Answer', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'
+                'New', 'No Answer', 'Hang Up', 'Voice Mail', 'Wrong Number', 'Call Back Qualified', 'Never Invested', 'Not Interested'
             ];
 
             statusCell.innerHTML = `
@@ -626,6 +626,7 @@ class UploadManager {
             <select class="form-select" name="status" required>
                 <option value="New">New</option>
                 <option value="No Answer">No Answer</option>
+                <option value="Hang Up">Hang Up</option>
                 <option value="Voice Mail">Voice Mail</option>
                 <option value="Wrong Number">Wrong Number</option>
                 <option value="Call Back Qualified">Call Back Qualified</option>

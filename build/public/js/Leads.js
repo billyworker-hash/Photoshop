@@ -6,6 +6,7 @@ class LeadsManager {
         const statusClassMap = {
             'New': 'status-new',
             'No Answer': 'status-no-answer',
+            'Hang Up': 'status-hang-up',
             'Voice Mail': 'status-voice-mail',
             'Wrong Number': 'status-wrong-number',
             'Call Back Qualified': 'status-call-back-qualified',
@@ -1228,6 +1229,7 @@ class LeadsManager {
         const statusOptions = [
             'New',
             'No Answer',
+            'Hang Up',
             'Voice Mail',
             'Wrong Number',
             'Call Back Qualified',
@@ -2683,7 +2685,7 @@ class LeadsManager {
         document.querySelectorAll('.lead-status-dropdown').forEach(dropdown => {
             const status = dropdown.value;
             // Remove existing status color classes
-            dropdown.classList.remove('status-new', 'status-no-answer', 'status-voice-mail',
+            dropdown.classList.remove('status-new', 'status-no-answer', 'status-hang-up', 'status-voice-mail',
                 'status-call-back-qualified', 'status-call-back-not-qualified');
             // Add class based on current status
             switch (status) {
